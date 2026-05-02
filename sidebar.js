@@ -38,6 +38,7 @@ let captureMode = 'full';
 let ripQueue = [];
 let currentRipIndex = -1;
 let isRippingManifest = false;
+let bookMetadata = { title: 'Untitled Book', author: '', cover: null };
 
 const squadron     = document.getElementById('squadron');
 const visBadge     = document.getElementById('vis-badge');
@@ -97,6 +98,18 @@ function broadcastDiscovery() {
         chrome.tabs.sendMessage(currentTabId, { type: 'CMD', action: 'DISCOVER' }, () => {
             if (chrome.runtime.lastError) { /* ignore */ }
         });
+        
+        // Also pre-fetch book metadata
+        chrome.tabs.sendMessage(currentTabId, { type: 'CMD', action: 'GET_BOOK_METADATA' }, (response) => {
+            if (response && !chrome.runtime.lastError) {
+                bookMetadata = {
+                    title: response.title || bookMetadata.title,
+                    author: response.author || bookMetadata.author,
+                    cover: response.cover || bookMetadata.cover
+                };
+                console.log('[PilotPro] Initial metadata captured:', bookMetadata);
+            }
+        });
     });
 }
 
@@ -139,12 +152,26 @@ const setEngineState = (active) => {
 };
 
 btnRun.onclick = () => {
-    if (bookOutline.length > 0) {
-        startManifestRip();
-    } else {
-        setEngineState(true);
-        sendCommand({ action: 'ENGINE_CONFIG', state: true, speed: flipDelay });
-    }
+    // Attempt to refresh metadata before starting
+    safeChrome(() => {
+        chrome.tabs.sendMessage(currentTabId, { type: 'CMD', action: 'GET_BOOK_METADATA' }, (response) => {
+            if (response && !chrome.runtime.lastError) {
+                bookMetadata = {
+                    title: response.title || bookMetadata.title,
+                    author: response.author || bookMetadata.author,
+                    cover: response.cover || bookMetadata.cover
+                };
+                console.log('[PilotPro] Book Metadata Refreshed:', bookMetadata);
+            }
+            
+            if (bookOutline.length > 0) {
+                startManifestRip();
+            } else {
+                setEngineState(true);
+                sendCommand({ action: 'ENGINE_CONFIG', state: true, speed: flipDelay });
+            }
+        });
+    });
 };
 
 btnStop.onclick = () => {
@@ -493,7 +520,7 @@ btnRecon.onclick = () => {
 
     safeChrome(() => {
         chrome.storage.local.set(
-            { printDataCache: { validPages, globalStyles, strippedCount } },
+            { printDataCache: { validPages, globalStyles, strippedCount, bookMetadata } },
             () => {
                 safeChrome(() => {
                     chrome.tabs.create({ url: chrome.runtime.getURL('print.html') });

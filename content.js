@@ -435,6 +435,46 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             case 'JUMP':
                 navigateToPage(newVal);
                 break;
+            case 'GET_BOOK_METADATA':
+                const metadata = {
+                    title: document.title || 'Untitled Book',
+                    url: window.location.href,
+                    cover: null,
+                    author: null
+                };
+                
+                // Try to find a better title in the DOM
+                const titleSelectors = ['.book-title', '#book-title', '.title', 'h1[class*="title" i]'];
+                for (const s of titleSelectors) {
+                    const el = findDeep(s);
+                    if (el && el.innerText) {
+                        metadata.title = el.innerText.trim();
+                        break;
+                    }
+                }
+
+                // Try to find an author
+                const authorSelectors = ['.author', '.book-author', '[aria-label*="author" i]', '.creator'];
+                for (const s of authorSelectors) {
+                    const el = findDeep(s);
+                    if (el && el.innerText) {
+                        metadata.author = el.innerText.trim();
+                        break;
+                    }
+                }
+
+                // Try to find a cover image
+                const coverSelectors = ['img[src*="cover" i]', 'img[alt*="cover" i]', 'img.cover', '.cover-image img'];
+                for (const s of coverSelectors) {
+                    const el = findDeep(s);
+                    if (el && el.src) {
+                        metadata.cover = el.src;
+                        break;
+                    }
+                }
+
+                sendResponse(metadata);
+                break;
             case 'PAGE_ACK':
                 if (autoPilot && isScraping && IS_TOP) {
                     setTimeout(triggerNext, flipDelay);
@@ -442,6 +482,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 break;
         }
     }
+    return true; // Keep channel open for async sendResponse
 });
 
 /* ─── Page-input navigation ────────────────────────────────────────────── */

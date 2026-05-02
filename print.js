@@ -36,44 +36,46 @@ document.getElementById('print-btn').addEventListener('click', () => {
     });
 });
 
+// Utility for professional logging
+const log = (step, msg) => console.log(`[PilotPro] ${step}: ${msg}`);
+
 // Fetch the print data from local storage
 chrome.storage.local.get(['printDataCache'], (result) => {
     const data = result.printDataCache;
-    
+    const progress = document.getElementById('progress');
+    const container = document.getElementById('page-container');
+    const printBtn = document.getElementById('print-btn');
+    const aiBtn = document.getElementById('ai-btn');
+    const eraseNotice = document.getElementById('erase-notice');
+
     if (!data || !data.validPages || data.validPages.length === 0) {
-        const progress = document.getElementById('progress');
-        if (progress) progress.textContent = 'Error: No valid pages found. Please capture pages before assembling.';
-        const container = document.getElementById('page-container');
+        if (progress) progress.textContent = 'Error: No valid pages found.';
         if (container) {
-            container.innerHTML = `<div style="text-align:center; padding: 60px 20px; color: #64748b; font-family: sans-serif;">
-                <h2 style="color: #334155; margin-bottom: 12px;">No Pages to Display</h2>
-                <p>It looks like there are no captured pages available to assemble. Please go back to the extension and capture some pages first.</p>
+            container.innerHTML = `<div style="text-align:center; padding: 100px 20px;">
+                <h2>No Pages Captured</h2>
+                <p>Please capture sections before assembling.</p>
             </div>`;
         }
         return;
     }
 
-    const { validPages, globalStyles } = data;
-    let totalStrippedCount = data.strippedCount || 0;
+    const { validPages, globalStyles, strippedCount, bookMetadata } = data;
+    let totalStrippedCount = strippedCount || 0;
 
-    if (globalStyles) {
-        document.getElementById('global-styles').innerHTML = globalStyles;
+    const styleEl = document.getElementById('global-styles');
+    if (globalStyles && styleEl) styleEl.textContent = globalStyles;
+
+    // Set document title for PDF generation
+    if (bookMetadata?.title) {
+        document.title = bookMetadata.title;
     }
 
-    const updateEraseNotice = () => {
-        if (totalStrippedCount > 0) {
-            const notice = document.getElementById('erase-notice');
-            if (notice) {
-                notice.textContent = `(${totalStrippedCount} blank pages automatically removed)`;
-            }
+    function updateEraseNotice() {
+        if (eraseNotice && totalStrippedCount > 0) {
+            eraseNotice.textContent = `(${totalStrippedCount} blank sections filtered)`;
         }
-    };
+    }
     updateEraseNotice();
-
-    const container = document.getElementById('page-container');
-    const progress = document.getElementById('progress');
-    const printBtn = document.getElementById('print-btn');
-    const aiBtn = document.getElementById('ai-btn');
 
     // Add global error listener for images to implement retry mechanism
     if (container) {
@@ -97,7 +99,42 @@ chrome.storage.local.get(['printDataCache'], (result) => {
         }, true); // Use capture phase to catch non-bubbling error events
     }
 
-    // Create AI result container
+    // 1. Create Cover Page if metadata exists
+    if (bookMetadata && container) {
+        const coverPage = document.createElement('div');
+        coverPage.className = 'pilot-page';
+        coverPage.style.textAlign = 'center';
+        coverPage.style.display = 'flex';
+        coverPage.style.flexDirection = 'column';
+        coverPage.style.justifyContent = 'center';
+        coverPage.style.alignItems = 'center';
+        coverPage.style.minHeight = '1000px'; // Ensure it fills the page
+        coverPage.style.padding = '80px 40px';
+        
+        let coverHtml = '';
+        if (bookMetadata.cover) {
+            coverHtml = `<img src="${bookMetadata.cover}" style="max-width: 80%; max-height: 700px; border-radius: 8px; box-shadow: 0 20px 50px rgba(0,0,0,0.3); margin-bottom: 60px;" alt="Book Cover">`;
+        } else {
+            coverHtml = `<div style="width: 300px; height: 450px; background: linear-gradient(135deg, #1e293b, #0f172a); border-radius: 12px; display: flex; align-items: center; justify-content: center; margin-bottom: 60px; box-shadow: 0 20px 50px rgba(0,0,0,0.3);">
+                <svg width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5" opacity="0.2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+            </div>`;
+        }
+
+        const title = bookMetadata.title || 'Untitled Book';
+        const author = bookMetadata.author ? `<div style="font-family: 'Inter', sans-serif; font-size: 24px; color: #64748b; margin-top: 10px;">${bookMetadata.author}</div>` : '';
+
+        coverPage.innerHTML = `
+            ${coverHtml}
+            <h1 style="font-family: 'Outfit', sans-serif; font-size: 48px; font-weight: 800; color: #0f172a; margin: 0; line-height: 1.2; max-width: 90%;">${title}</h1>
+            ${author}
+            <div style="margin-top: 100px; font-family: 'Inter', sans-serif; font-size: 14px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.1em;">
+                Archived with PilotPro &bull; ${new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
+            </div>
+        `;
+        container.appendChild(coverPage);
+    }
+
+    // 2. Create AI result container
     const aiResult = document.createElement('div');
     aiResult.className = 'pilot-page no-print';
     aiResult.style.cssText = "display: none; margin-bottom: 24px;";
@@ -226,7 +263,6 @@ chrome.storage.local.get(['printDataCache'], (result) => {
 
                 // 2. Resolve URLs and Styles
                 const baseUrl = p.meta.url || 'https://example.com';
-                const baseOrigin = new URL(baseUrl).origin;
                 const lazyAttributes = ['data-original', 'data-src', 'data-lazy-src', 'data-url', 'lazy-src', 'src'];
                 
                 temp.querySelectorAll('img, source, picture').forEach(el => {
@@ -240,11 +276,17 @@ chrome.storage.local.get(['printDataCache'], (result) => {
                             }
                         }
                         if (bestSrc) {
-                            if (bestSrc.startsWith('data:')) {
-                                el.src = bestSrc;
-                            } else {
-                                try { el.src = new URL(bestSrc, baseUrl).href; } catch(e) {}
-                            }
+                            const finalSrc = bestSrc.startsWith('data:') ? bestSrc : new URL(bestSrc, baseUrl).href;
+                            el.src = finalSrc;
+                            // Add a robust retry mechanism
+                            el.onerror = function() {
+                                if (this.src.startsWith('http') && !this.dataset.retried) {
+                                    this.dataset.retried = 'true';
+                                    const alt = this.src.includes('vitalsource') ? this.src.replace(/vitalsource.*?\//, '') : this.src;
+                                    log('Image', `Retrying failed image: ${this.src}`);
+                                    setTimeout(() => { this.src = finalSrc + '?retry=' + Date.now(); }, 1000);
+                                }
+                            };
                         }
                         el.removeAttribute('srcset');
                         el.removeAttribute('loading');
@@ -258,15 +300,14 @@ chrome.storage.local.get(['printDataCache'], (result) => {
 
                 if (lastDiv && !chapterChanged) {
                     targetDiv = lastDiv;
-                    const inlineHeader = document.createElement('div');
-                    inlineHeader.style.cssText = 'text-align:right; font-size:10px; color:#94a3b8; border-top:1px dashed #e2e8f0; margin-top:24px; padding-top:8px; margin-bottom:16px; font-family:monospace; break-before:auto;';
-                    inlineHeader.textContent = currentPageText;
-                    targetDiv.querySelector('.pg-content').appendChild(inlineHeader);
+                    // Only add a very subtle separator for internal page breaks
+                    const hr = document.createElement('hr');
+                    hr.style.cssText = 'border:none; border-top:1px dashed #f1f5f9; margin:24px 0; opacity:0.5;';
+                    targetDiv.querySelector('.pg-content').appendChild(hr);
                 } else {
                     targetDiv = document.createElement('div');
                     targetDiv.className = 'pilot-page';
                     if (chapterChanged) targetDiv.classList.add('chapter-start');
-                    targetDiv.setAttribute('data-page-id', currentPageText);
                     targetDiv.setAttribute('data-chapter', currentChapter);
                     targetDiv.innerHTML = `<div class="pg-content"></div>`;
                     container.appendChild(targetDiv);
@@ -276,37 +317,10 @@ chrome.storage.local.get(['printDataCache'], (result) => {
                 const contentArea = targetDiv.querySelector('.pg-content');
                 const segment = document.createElement('div');
                 segment.className = 'pg-segment';
-                segment.style.marginBottom = '20px';
                 segment.innerHTML = temp.innerHTML;
                 contentArea.appendChild(segment);
-                
-                // Update header if there are warnings
-                if (imageErrors > 0) {
-                    const status = targetDiv.querySelector('.pg-header span:last-child');
-                    if (status && !status.innerHTML.includes('⚠️')) {
-                        status.innerHTML += ` <span style="color:#f59e0b;font-size:10px" title="${imageErrors} images failed">⚠️</span>`;
-                    }
-                }
             } catch (err) {
-                console.error(`Error rendering page ${i + 1} during '${currentStep}':`, err);
-                const errorDiv = document.createElement('div');
-                errorDiv.className = 'pilot-page';
-                errorDiv.innerHTML = `
-                    <div class="pg-header">
-                        <span>Error</span>
-                        <span>SEQ ${i + 1}</span>
-                    </div>
-                    <div class="pg-content" style="color: #ef4444; text-align: center; padding: 40px; font-family: sans-serif;">
-                        <h3 style="margin-top: 0;">Failed to render this page</h3>
-                        <p style="color: #475569;">An error occurred while <strong>${currentStep.toLowerCase()}</strong>.</p>
-                        <div style="font-size: 11px; color: #94a3b8; margin-top: 20px; font-family: monospace; background: #f8fafc; padding: 12px; border-radius: 6px; text-align: left; overflow-x: auto; border: 1px solid #e2e8f0;">
-                            <strong style="color: #334155;">Error Details:</strong><br>
-                            ${err.message}<br><br>
-                            <strong style="color: #334155;">Source URL:</strong><br>
-                            ${validPages[i]?.meta?.url || 'Unknown'}
-                        </div>
-                    </div>`;
-                container.appendChild(errorDiv);
+                console.error(`Error rendering page:`, err);
             }
         }
 
