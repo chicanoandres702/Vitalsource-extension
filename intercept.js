@@ -87,9 +87,12 @@
                 }
             }
 
-            log('Detected Book Metadata for', bookId || 'unknown', 'from', url, `(${uniqueItems.length} items)`);
+            const isPagebreaks = url.includes('pagebreaks');
+            const messageType = isPagebreaks ? 'VS_PAGEBREAKS_JSON' : 'VS_OUTLINE_JSON';
+            
+            log(`Detected Book Metadata (${messageType}) for`, bookId || 'unknown', 'from', url, `(${uniqueItems.length} items)`);
             window.postMessage({
-                type: 'VS_OUTLINE_JSON',
+                type: messageType,
                 data: uniqueItems,
                 bookId: bookId,
                 url: url

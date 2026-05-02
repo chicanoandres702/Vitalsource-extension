@@ -195,13 +195,25 @@ function startManifestRip() {
         // Fallback for no selection
         ripQueue = [...bookOutline];
     } else {
-        ripQueue = [...bookOutline];
+        // AUTO RIP now utilizes Exact Pagebreaks Navigation for exact pagination
+        if (window.bookPagebreaks && window.bookPagebreaks.length > 0) {
+            ripQueue = window.bookPagebreaks.map(p => ({
+                cfi: p.cfi,
+                url: p.url,
+                page: String(p.label || p.page || ''),
+                title: 'Page ' + (p.label || p.page || ''),
+                stopPage: String(p.label || p.page || '') // Forces exactly 1 snap per jump
+            }));
+            console.log('[PilotPro] Overriding Auto Rip with Exact Pagebreak Sequence', ripQueue.length);
+        } else {
+            ripQueue = [...bookOutline];
+        }
     }
     
     currentRipIndex = 0;
     
-    // Start with global config
-    sendCommand({ action: 'ENGINE_CONFIG', state: true, speed: flipDelay });
+    // Config but we handle stepping manually internally here
+    sendCommand({ action: 'ENGINE_CONFIG', state: true, speed: flipDelay, forceManualStep: (captureMode === 'full') });
     
     processRipQueue();
 }
@@ -344,6 +356,26 @@ safeChrome(() => {
                 if (isRippingManifest) {
                     const currentItem = ripQueue[currentRipIndex];
                     if (currentItem) {
+                        // Check if we reached the boundary of this rip item
+                        let stopStr = String(currentItem.stopPage).trim().toLowerCase();
+                        let currStr = pgLabel.toLowerCase();
+                        let currClean = currStr.replace(/page/g, '').trim();
+
+                        if (stopStr === currStr || stopStr === currClean || stopStr === 'eof') {
+                            while (currentRipIndex < ripQueue.length - 1 && 
+                                  String(ripQueue[currentRipIndex + 1].page).toLowerCase().replace(/page/g,'').trim() === currClean) {
+                                currentRipIndex++;
+                                console.log('[PilotPro] Skipping duplicate pagebreak cluster.');
+                            }
+
+                            console.log('[PilotPro] Boundary Reached, moving queue');
+                            setTimeout(() => {
+                                currentRipIndex++;
+                                processRipQueue();
+                            }, 300);
+                            return; 
+                        }
+                        
                         // If this was a single page capture (no sweep), move to next
                         if (!currentItem.stopPage) {
                             // Find the next unique page in the queue to avoid stuttering on multiple TOC entries for same page
@@ -419,7 +451,7 @@ btnRecon.onclick = () => {
             temp.querySelectorAll(s).forEach(n => n.remove());
         });
 
-        const pureText     = (temp.textContent || '').replace(/[^a-zA-Z0-9]/g, '');
+        const pureText     = (temp.textContent || '').trim();
         let   hasValidMedia = false;
 
         temp.querySelectorAll('img, canvas, svg, iframe').forEach(m => {
@@ -536,8 +568,14 @@ function loadExtensions() {
 
 /* ─── Chapter Management ──────────────────────────────────────────────── */
 function checkForOutline(bookId) {
-    // 1. Check storage first
-    chrome.storage.local.get([`outline_${bookId}`], (res) => {
+// 1. Check storage first
+    chrome.storage.local.get([`outline_${bookId}`, `pagebreaks_${bookId}`], (res) => {
+        if (res[`pagebreaks_${bookId}`]) {
+            window.bookPagebreaks = res[`pagebreaks_${bookId}`];
+            console.log('[PilotPro] Loaded native pagebreaks:', window.bookPagebreaks.length);
+        } else {
+            window.bookPagebreaks = [];
+        }
         if (res[`outline_${bookId}`]) {
             handleOutlineUpdate(res[`outline_${bookId}`]);
         }

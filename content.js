@@ -24,6 +24,8 @@ function debounce(fn, ms) {
 window.__pilotpro_outline = [];
 let __current_book_id = null;
 
+window.__pilotpro_pagebreaks = [];
+
 window.addEventListener('message', (ev) => {
     if (ev.data && ev.data.type === 'VS_OUTLINE_JSON') {
         window.__pilotpro_outline = ev.data.data;
@@ -31,11 +33,23 @@ window.addEventListener('message', (ev) => {
         
         if (DEBUG) log('DATA', `Captured TOC for Book: ${__current_book_id}. Items: ${window.__pilotpro_outline.length}`);
         
-        // Cache it in storage with book-specific key
         try {
             if (__current_book_id) {
                 const saveObj = { bookId: __current_book_id };
                 saveObj[`outline_${__current_book_id}`] = window.__pilotpro_outline;
+                chrome.storage.local.set(saveObj);
+            }
+        } catch (e) {}
+    } else if (ev.data && ev.data.type === 'VS_PAGEBREAKS_JSON') {
+        window.__pilotpro_pagebreaks = ev.data.data;
+        __current_book_id = ev.data.bookId || __current_book_id;
+        
+        if (DEBUG) log('DATA', `Captured Pagebreaks for Book: ${__current_book_id}. Items: ${window.__pilotpro_pagebreaks.length}`);
+        
+        try {
+            if (__current_book_id) {
+                const saveObj = { bookId: __current_book_id };
+                saveObj[`pagebreaks_${__current_book_id}`] = window.__pilotpro_pagebreaks;
                 chrome.storage.local.set(saveObj);
             }
         } catch (e) {}
@@ -376,6 +390,8 @@ let _lastStabilizeFP = '';
 let _stabilizeReady = false;
 let hasSnappedCurrentPage = false; 
 let autoPilotStopPage = null; // New boundary tracking
+let lastContentFP = '';
+let lastTextHash = '';
 
 const NEXT_SELECTORS = [
     'button[aria-label="Next"]',
@@ -760,10 +776,43 @@ const snap = (target, finalHtml, force = false) => {
                 pageId   = slider.getAttribute('aria-valuenow');
                 pageText = slider.getAttribute('aria-valuetext');
             } else {
-                // FALLBACK: Search for elements that might contain a page number
-                const pgEl = findDeep('.page-number, .vst-page-count, [data-page], .pbk-page-number');
-                pageId   = pgEl ? (pgEl.getAttribute('data-page') || pgEl.innerText.trim()) : location.href;
-                pageText = pgEl ? pgEl.innerText.trim() : (document.title || 'Page');
+                // NEW: Use intercepted pagebreaks array to determine highly accurate page numbers natively
+                let accurateLabel = null;
+                if (window.__pilotpro_pagebreaks && window.__pilotpro_pagebreaks.length > 0) {
+                    for (const pb of window.__pilotpro_pagebreaks) {
+                        if (!pb.cfi) continue;
+                        const idMatch = pb.cfi.match(/\[([^\];=]+)\]$/);
+                        if (idMatch) {
+                            const el = document.getElementById(idMatch[1]);
+                            if (el) {
+                                const rect = el.getBoundingClientRect();
+                                // Check if this page break marker is visible in the viewport
+                                if (rect.top >= -50 && rect.left >= -50 && rect.top < window.innerHeight && rect.left < window.innerWidth) {
+                                    accurateLabel = pb.label;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    if (!accurateLabel) {
+                        // Fallback: Exact URL matching for fixed-layout EPUBs
+                        const path = new URL(location.href).pathname;
+                        const matches = window.__pilotpro_pagebreaks.filter(p => p.url && (path.includes(p.url) || path.endsWith(p.url)));
+                        if (matches.length > 0) {
+                            accurateLabel = matches[0].label;
+                        }
+                    }
+                }
+
+                if (accurateLabel) {
+                    pageId = accurateLabel;
+                    pageText = 'Page ' + accurateLabel;
+                } else {
+                    // LEGACY FALLBACK
+                    const pgEl = findDeep('.page-number, .vst-page-count, [data-page], .pbk-page-number');
+                    pageId   = pgEl ? (pgEl.getAttribute('data-page') || pgEl.innerText.trim()) : location.href;
+                    pageText = pgEl ? pgEl.innerText.trim() : (document.title || 'Page');
+                }
             }
         } catch(e) {
             pageId   = location.href;
@@ -788,8 +837,11 @@ const snap = (target, finalHtml, force = false) => {
         if (!chapter || chapter === 'undefined') chapter = 'Active Chapter';
 
         const sourceText  = getFingerprintSource(target);
-        const textHash    = quickHash(getPureContentText(target));
-        const signature   = quickHash(sourceText);
+        const pureTextStr = getPureContentText(target);
+        const salt        = pageId + '|' + pageText;
+        // Use full signature for small text pages to prevent false exact-duplicate detections on image pages
+        const textHash    = pureTextStr.length > 50 ? quickHash(pureTextStr) : quickHash(salt + '|' + sourceText);
+        const signature   = quickHash(salt + '|' + sourceText);
 
         if (!force) {
             // Level 1: Same exact DOM structure as 500ms ago? (Prevents stutter)

@@ -1,5 +1,39 @@
 document.getElementById('print-btn').addEventListener('click', () => {
-    window.print();
+    const btn = document.getElementById('print-btn');
+    btn.textContent = 'Generating PDF natively...';
+    btn.disabled = true;
+
+    chrome.runtime.sendMessage({ action: 'CREATE_NATIVE_PDF' }, (response) => {
+        if (chrome.runtime.lastError) {
+            console.error('Runtime error:', chrome.runtime.lastError);
+            alert('Failed to generate PDF: ' + chrome.runtime.lastError.message);
+            btn.textContent = 'Download PDF';
+            btn.disabled = false;
+            return;
+        }
+
+        if (response && response.success && response.pdfData) {
+            // Convert base64 to Blob
+            const binary = atob(response.pdfData);
+            const array = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) {
+                array[i] = binary.charCodeAt(i);
+            }
+            const blob = new Blob([array], { type: 'application/pdf' });
+            const url = URL.createObjectURL(blob);
+            
+            // Open the PDF in a new tab natively using Chrome's built-in viewer
+            window.open(url, '_blank');
+            
+            btn.textContent = 'View PDF';
+            btn.disabled = false;
+        } else {
+            console.error('PDF error:', response?.error);
+            alert('Failed to generate native PDF: ' + (response?.error || 'Unknown error'));
+            btn.textContent = 'Download PDF';
+            btn.disabled = false;
+        }
+    });
 });
 
 // Fetch the print data from local storage
@@ -413,9 +447,8 @@ chrome.storage.local.get(['printDataCache'], (result) => {
             // Yield to the browser between batches so it can paint
             setTimeout(renderBatch, 50);
         } else {
-            // All pages rendered — enable print
             if (printBtn) {
-                printBtn.textContent = 'Save as PDF';
+                printBtn.textContent = 'View PDF';
                 printBtn.disabled = false;
             }
             if (aiBtn) {

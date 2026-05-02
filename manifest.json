@@ -3,7 +3,7 @@
   "name": "VitalSource Pilot Pro",
   "version": "9.3.0",
   "description": "Autonomous PDF Engine: Removed body fallback, blocked Syncing states, decoupled CSS payloads, and batched PDF rendering.",
-  "permissions": ["sidePanel", "tabs", "activeTab", "scripting", "storage", "unlimitedStorage", "management"],
+  "permissions": ["sidePanel", "tabs", "activeTab", "scripting", "storage", "unlimitedStorage", "management", "debugger", "downloads"],
   "host_permissions": [
     "*://bookshelf.vitalsource.com/*",
     "*://capella.vitalsource.com/*",
