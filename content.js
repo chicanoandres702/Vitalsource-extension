@@ -1,4 +1,4 @@
-const DEBUG = true;
+const DEBUG = false;
 function log(category, message, data = "") {
     if (!DEBUG) return;
     const color = {
@@ -20,6 +20,28 @@ function debounce(fn, ms) {
     return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
 }
 
+// Global book outline storage
+window.__pilotpro_outline = [];
+let __current_book_id = null;
+
+window.addEventListener('message', (ev) => {
+    if (ev.data && ev.data.type === 'VS_OUTLINE_JSON') {
+        window.__pilotpro_outline = ev.data.data;
+        __current_book_id = ev.data.bookId || __current_book_id;
+        
+        if (DEBUG) log('DATA', `Captured TOC for Book: ${__current_book_id}. Items: ${window.__pilotpro_outline.length}`);
+        
+        // Cache it in storage with book-specific key
+        try {
+            if (__current_book_id) {
+                const saveObj = { bookId: __current_book_id };
+                saveObj[`outline_${__current_book_id}`] = window.__pilotpro_outline;
+                chrome.storage.local.set(saveObj);
+            }
+        } catch (e) {}
+    }
+});
+
 function getContextId() {
     let url = window.location.href;
     let isbnMatch = url.match(/(\d{10,13})/);
@@ -37,7 +59,16 @@ function getContextId() {
 
 const CONTEXT_ID = getContextId();
 const IS_TOP = window.top === window.self;
-const SENSOR_ID = 'sensor-' + Math.random().toString(36).substring(2, 9);
+const SENSOR_ID = 'vst-' + Math.random().toString(36).substring(2, 7);
+
+function safeSend(msg) {
+    try {
+        if (!chrome?.runtime?.id) return;
+        chrome.runtime.sendMessage(msg, () => {
+            if (chrome.runtime.lastError) { /* ignore */ }
+        });
+    } catch (e) { /* ignore context invalidated */ }
+}
 
 function findDeep(selector, root = document) {
     if (!selector) return null;
@@ -182,12 +213,7 @@ function getFingerprintSource(el) {
 }
 
 const CONTENT_SELECTORS = [
-    '#epub-content-container', 'section.chapter-rw', 'section.frontmatter-rw',
-    '.pc.comment78305', 'div.width-90', 'div[role="main"]',
-    'section[epub\\:type="chapter"]', 'article', '.st-page-content',
-    '#p-chapter', '.sc-kMyqmI', '.page-content',
-    '.pdf-page-container', '.vst-canvas-container',
-    '[data-testid="page-container"]', '.mosaic-page', '.epub-container'
+    '#epub-content-container', 'section.chapter-rw', '.mosaic-page', '.epub-container'
 ];
 
 function autoDetectContent(force = false) {
@@ -299,6 +325,7 @@ let isTransitioning = false;
 let _lastStabilizeFP = '';
 let _stabilizeReady = false;
 let hasSnappedCurrentPage = false; 
+let autoPilotStopPage = null; // New boundary tracking
 
 const NEXT_SELECTORS = [
     'button[aria-label="Next"]',
@@ -314,118 +341,194 @@ const NEXT_SELECTORS = [
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === 'CMD') {
         const newVal = message;
-        log('BRIDGE', `Command: ${newVal.action || newVal.type}`);
+        log('BRIDGE', `Command: ${newVal.action}`);
         
-        if (newVal.action === 'ENGINE_CONFIG') {
-            isScraping = newVal.state;
-            autoPilot  = newVal.state;
-            flipDelay  = newVal.speed || flipDelay;
-            
-            if (isScraping) {
-                if (IS_TOP) {
-                    log('NAV', 'Engine started — seeking page 1 before scrape begins.');
-                    goToFirstPage(() => {
-                        hasSnappedCurrentPage = false;
-                        scheduleSnap(800);
-                    });
-                } else {
-                    hasSnappedCurrentPage = false;
-                    setTimeout(() => scheduleSnap(800), 1000); 
+        switch (newVal.action) {
+            case 'ENGINE_CONFIG':
+                isScraping = newVal.state;
+                autoPilot  = newVal.state;
+                flipDelay  = newVal.speed || flipDelay;
+                autoPilotStopPage = newVal.stopPage || null;
+                if (isScraping) scheduleSnap(500);
+                break;
+            case 'SET_SPEED':
+                flipDelay = newVal.speed || flipDelay;
+                break;
+            case 'PICK':
+                activatePicker();
+                break;
+            case 'SNAP':
+                snapWithRetry(0, true);
+                break;
+            case 'DISCOVER':
+                sendPulse();
+                break;
+            case 'JUMP':
+                navigateToPage(newVal);
+                break;
+            case 'PAGE_ACK':
+                if (autoPilot && isScraping && IS_TOP) {
+                    setTimeout(triggerNext, flipDelay);
                 }
-            }
-        }
-        if (newVal.action === 'SET_SPEED') flipDelay = newVal.speed || flipDelay;
-        if (newVal.action === 'PICK') activatePicker();
-        if (newVal.action === 'SNAP') snapWithRetry(0, true); 
-
-        if (newVal.action === 'PAGE_ACK' && autoPilot && isScraping && IS_TOP) {
-            log('NAV', `ACK received. Flipping in ${flipDelay}ms.`);
-            setTimeout(triggerNext, flipDelay);
+                break;
         }
     }
 });
+
+/* ─── Page-input navigation ────────────────────────────────────────────── */
+// The VitalSource page input: <input id="text-field-XwRZxEghbSp" class="InputControl__input...">
+function findPageInput() {
+    // Search for it including inside shadow DOMs
+    return findDeep('input.InputControl__input') ||
+           findDeep('input[id^="text-field-"]')   ||
+           document.querySelector('input.InputControl__input') ||
+           document.querySelector('input[id^="text-field-"]');
+}
+
+// Simulate the full React synthetic + native event chain on an input
+function setInputValue(input, value) {
+    const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+    nativeInputValueSetter.call(input, value);
+    input.dispatchEvent(new Event('input',  { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+function navigateToPage(cmd) {
+    // cmd has: { page, cfi, url, title }
+    const pageNum = cmd.page ? String(cmd.page).trim() : null;
+    const currentPos = getCurrentPageValue();
+
+    // Guard: Don't re-jump if we are already where we need to be.
+    // This prevents the "reset to chapter start" stutter.
+    if (pageNum && currentPos && String(pageNum) === String(currentPos)) {
+        log('NAV', 'Already at target page: ' + pageNum + '. Skipping JUMP.');
+        // If we were supposed to snap, fire it anyway
+        if (isScraping) scheduleSnap(200);
+        return;
+    }
+
+    if (pageNum) {
+        const input = findPageInput();
+        if (input) {
+            log('NAV', `Navigating via page input to: ${pageNum}`);
+            input.focus();
+            setInputValue(input, pageNum);
+
+            // Fire the full keyboard Enter chain that React/VS listeners expect
+            const enterOpts = { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true };
+            input.dispatchEvent(new KeyboardEvent('keydown',  enterOpts));
+            input.dispatchEvent(new KeyboardEvent('keypress', enterOpts));
+            input.dispatchEvent(new KeyboardEvent('keyup',    enterOpts));
+
+            // Also submit the parent form if present
+            const form = input.closest('form');
+            if (form) form.dispatchEvent(new Event('submit', { bubbles: true }));
+
+            // Delayed repeat in case React processes asynchronously
+            setTimeout(() => {
+                input.dispatchEvent(new KeyboardEvent('keydown',  enterOpts));
+                input.dispatchEvent(new KeyboardEvent('keypress', enterOpts));
+                input.dispatchEvent(new KeyboardEvent('keyup',    enterOpts));
+            }, 50);
+
+            return;
+        }
+    }
+
+    // Fallback: CFI hash navigation
+    if (cmd.cfi) {
+        log('NAV', `Fallback CFI nav: ${cmd.cfi}`);
+        window.location.hash = cmd.cfi;
+    } else if (cmd.url) {
+        const clean = cmd.url.split('#')[0];
+        if (window.location.pathname.includes(clean)) {
+            const h = cmd.url.split('#')[1];
+            if (h) window.location.hash = h;
+        } else {
+            window.location.href = cmd.url;
+        }
+    }
+}
 
 function triggerNext() {
     const now = Date.now();
     if (now - lastFlipTime < flipDelay * 0.8) return; 
     lastFlipTime = now;
     
+    // Check if we hit the limit for chapter ripping
+    const currentPage = getCurrentPageValue();
+    if (autoPilot && autoPilotStopPage && currentPage === autoPilotStopPage) {
+        log('AUTO', 'Reached stop boundary: ' + currentPage + '. Ending chapter sweep.');
+        autoPilot = false;
+        isScraping = false;
+        safeSend({ type: 'CHAPTER_COMPLETE', page: currentPage });
+        return;
+    }
+
     hasSnappedCurrentPage = false; 
     invalidateSliderCache(); 
 
     isTransitioning = true;
     setTimeout(() => { isTransitioning = false; }, Math.min(1500, flipDelay * 0.85));
 
-    const next = findDeep(NEXT_SELECTORS);
-    if (next && !next.disabled) {
-        log('NAV', 'Next button clicked.');
-        next.click();
-    } else {
-        log('NAV', 'Next button absent — keyboard fallback.');
-        const keyEvent = new KeyboardEvent('keydown', { key: 'ArrowRight', code: 'ArrowRight', keyCode: 39, which: 39, bubbles: true, cancelable: true });
-        document.dispatchEvent(keyEvent);
+    const nextBtn = findDeep(NEXT_SELECTORS);
+    
+    // Prioritize Keyboard ArrowRight as requested, then fallback to click
+    const keyOptions = { key: 'ArrowRight', code: 'ArrowRight', keyCode: 39, which: 39, bubbles: true, cancelable: true };
+    const targets = [document, window, document.body];
+    try { if (window.top !== window.self) targets.push(window.top.document, window.top); } catch(e) {}
+    
+    log('NAV', 'Simulating ArrowRight trigger...');
+    targets.forEach(t => {
         try {
-            if (window.top !== window.self) {
-                window.top.document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', code: 'ArrowRight', keyCode: 39, which: 39, bubbles: true, cancelable: true }));
-            }
-        } catch(e) {
-            // CORS blocked access to top window, fallback to local dispatch only
-        }
+            if (t.focus) t.focus();
+            t.dispatchEvent(new KeyboardEvent('keydown', keyOptions));
+            t.dispatchEvent(new KeyboardEvent('keyup',   keyOptions));
+        } catch(err) {}
+    });
+
+    // Fallback to physical click if keyboard didn't seem to work (or as a double-tap)
+    if (nextBtn && !nextBtn.disabled) {
+        log('NAV', 'Sending fallback Click to Next button.');
+        nextBtn.click();
     }
     
     // Explicitly schedule the next snap to ensure the loop continues even if mutations are missed
+    const lastP = getCurrentPageValue();
     setTimeout(() => {
         if (autoPilot && isScraping) {
+            const currentP = getCurrentPageValue();
+            if (currentP === lastP && lastP !== null) {
+                log('NAV', 'No page movement detected (stuck at ' + currentP + '). Stopping sweep.');
+                autoPilot = false;
+                isScraping = false;
+                safeSend({ type: 'CHAPTER_COMPLETE', page: currentP, status: 'EOF' });
+                return;
+            }
             log('NAV', 'Explicitly triggering next snap cycle.');
-            chrome.runtime.sendMessage({ type: 'RELAY_SNAP' });
+            safeSend({ type: 'RELAY_SNAP' });
         }
-    }, flipDelay + 300);
+    }, flipDelay + 500);
 }
 
-function goToFirstPage(callback) {
-    const slider = getSlider();
-    if (slider) {
-        const min = slider.getAttribute('aria-valuemin') || '0';
-        const current = slider.getAttribute('aria-valuenow') || '0';
-
-        if (current === min || current === '0' || current === '1') {
-            log('NAV', 'Already on first page.');
-            setTimeout(callback, 400);
-            return;
-        }
-
-        log('NAV', `Seeking to first page (currently at ${current}, min is ${min}).`);
-        slider.focus();
-        slider.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', keyCode: 36, bubbles: true }));
-
-        try {
-            const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-            nativeInputValueSetter.call(slider, min);
-            slider.dispatchEvent(new Event('input', { bubbles: true }));
-            slider.dispatchEvent(new Event('change', { bubbles: true }));
-        } catch(e) {
-            log('NAV', 'Direct slider set failed, relying on Home key only.');
-        }
-
-        setTimeout(() => {
-            invalidateSliderCache();
-            hasSnappedCurrentPage = false;
-            _lastStabilizeFP = '';
-            _stabilizeReady = false;
-            log('NAV', 'First-page seek complete. Starting scrape.');
-            callback();
-        }, 1500);
-
-    } else {
-        log('NAV', 'Slider not found — starting from current position.');
-        setTimeout(callback, 400);
-    }
-}
+// Removed goToFirstPage - navigation is now manifest-driven.
 
 const MAX_RETRIES = 15; 
 let spinnerWaitAttempts = 0;
 
 function snapWithRetry(attempt = 0, force = false) {
+    // 0. Boundary Check: Ensure we don't snap "one more" than requested
+    if (autoPilot && autoPilotStopPage) {
+        const cur = getCurrentPageValue();
+        if (cur === autoPilotStopPage) {
+            log('AUTO', 'Boundary reached at snap time: ' + cur + '. Skipping snap and finishing chapter.');
+            autoPilot = false;
+            isScraping = false;
+            safeSend({ type: 'CHAPTER_COMPLETE', page: cur });
+            return;
+        }
+    }
+
     if (IS_TOP) {
         // If there's a large iframe, assume the iframe will handle the snapping.
         const hasLargeIframe = Array.from(document.querySelectorAll('iframe')).some(f => {
@@ -592,13 +695,19 @@ const snap = (target, finalHtml, force = false) => {
                 pageId   = slider.getAttribute('aria-valuenow');
                 pageText = slider.getAttribute('aria-valuetext');
             } else {
-                pageId   = location.href;
-                pageText = document.title || 'Page';
+                // FALLBACK: Search for elements that might contain a page number
+                const pgEl = findDeep('.page-number, .vst-page-count, [data-page], .pbk-page-number');
+                pageId   = pgEl ? (pgEl.getAttribute('data-page') || pgEl.innerText.trim()) : location.href;
+                pageText = pgEl ? pgEl.innerText.trim() : (document.title || 'Page');
             }
         } catch(e) {
             pageId   = location.href;
             pageText = document.title || 'Page';
         }
+        
+        // Final safety check to avoid "undefined" strings in UI
+        if (!pageId) pageId = 'unknown-pg';
+        if (!pageText || pageText === 'undefined') pageText = 'Current Page';
         
         if (!pageText || pageText.toLowerCase().includes('sync') || pageText.toLowerCase().includes('load')) {
             log('SENSOR', 'Slider still syncing — deferring snap 500ms.');
@@ -607,8 +716,11 @@ const snap = (target, finalHtml, force = false) => {
             return;
         }
 
-        const chEl    = findDeep('.chapter-title, h1, .pc img');
-        const chapter = chEl ? (chEl.tagName === 'IMG' ? chEl.alt : chEl.innerText.trim()) : 'Book Content';
+        const chEl = findDeep('.chapter-title, h1, h2, h3, .vst-chapter, .pc img, .title-block');
+        let chapter = chEl ? (chEl.tagName === 'IMG' ? chEl.alt : chEl.innerText.trim()) : 'Book Content';
+        
+        // Final safety check for chapter string
+        if (!chapter || chapter === 'undefined') chapter = 'Active Chapter';
 
         const sourceText = getFingerprintSource(target);
         const signature  = quickHash(sourceText) + (force ? '-forced-' + Date.now() : '');
@@ -625,7 +737,7 @@ const snap = (target, finalHtml, force = false) => {
         const styles = capturedPageCount === 0 ? getAbsoluteStyles() : '';
         capturedPageCount++;
 
-        chrome.runtime.sendMessage({
+        safeSend({
             type: 'DATA',
             html: finalHtml,
             styles,
@@ -756,7 +868,7 @@ setInterval(() => {
 document.addEventListener('visibilitychange', () => {
     const hidden = document.hidden;
     log('SENSOR', hidden ? 'Tab hidden — engine paused.' : 'Tab visible — engine resumed.');
-    chrome.runtime.sendMessage({ type: hidden ? 'TAB_HIDDEN' : 'TAB_VISIBLE', timestamp: Date.now() });
+    safeSend({ type: hidden ? 'TAB_HIDDEN' : 'TAB_VISIBLE', timestamp: Date.now() });
 });
 
 setInterval(() => {
@@ -812,10 +924,43 @@ function activatePicker() {
     document.body.appendChild(shield);
 }
 
-const sendPulse = () => chrome.runtime.sendMessage({ type: 'ALIVE', sensorId: SENSOR_ID, contextId: CONTEXT_ID, url: location.href, timestamp: Date.now() });
+const isSignificantFrame = () => {
+    if (window.top === window.self) return true;
+    const body = document.body;
+    if (!body) return false;
+    // Lower threshold for "content" detection to avoid missing short pages
+    return (body.innerText && body.innerText.length > 50) || !!autoDetectContent();
+};
+
+const sendPulse = () => {
+    if (!isSignificantFrame()) return;
+    safeSend({ 
+        type: 'ALIVE', 
+        sensorId: SENSOR_ID, 
+        contextId: CONTEXT_ID, 
+        url: location.href, 
+        timestamp: Date.now() 
+    });
+};
+
+window.addEventListener('beforeunload', () => {
+    safeSend({ type: 'DEAD', sensorId: SENSOR_ID });
+});
 
 sendPulse();
 setInterval(sendPulse, 5000);
+
+function getCurrentPageValue() {
+    const input = document.querySelector('input[class*="InputControl__input"]');
+    if (!input) {
+        // Fallback to searching all inputs for a numeric or roman value
+        const inputs = Array.from(document.querySelectorAll('input'));
+        for (const i of inputs) {
+            if (i.value && /^[ivx0-9]+$/i.test(i.value)) return i.value;
+        }
+    }
+    return input ? input.value : null;
+}
 
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', armPageChangeObserver);
