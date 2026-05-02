@@ -4,21 +4,27 @@
     <title>Pilot Pro — PDF Assembly</title>
     <meta charset="UTF-8">
     <style>
-        html, body { background:#cbd5e1 !important; margin:0 !important; padding:0 !important; display:block !important; overflow:auto !important; height:auto !important; }
+        html, body { background:#cbd5e1 !important; margin:0 !important; padding:0 !important; display:block !important; overflow:auto !important; height:auto !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
         .pilot-toolbar { position:fixed; top:0; left:0; right:0; background:#0f172a !important; color:white !important; padding:16px 24px !important; display:flex !important; justify-content:space-between !important; align-items:center !important; z-index:2147483647 !important; box-shadow:0 4px 12px rgba(0,0,0,0.2) !important; font-family:sans-serif !important; }
         .pilot-btn { background:#3b82f6 !important; color:white !important; border:none !important; padding:10px 20px !important; border-radius:6px !important; font-weight:bold !important; cursor:pointer !important; font-size:14px !important; }
         .pilot-btn:hover { background:#2563eb !important; }
         .pilot-progress { font-size:12px; color:#94a3b8; margin-left:16px; }
-        .pilot-wrapper { padding-top:80px !important; display:block !important; }
-        .pilot-page { background:#fff !important; margin:0 auto 24px auto !important; padding:40px !important; max-width:8.5in !important; box-shadow:0 10px 25px rgba(0,0,0,0.1) !important; position:relative !important; overflow:hidden !important; page-break-after:always !important; box-sizing:border-box !important; }
-        .pg-header { font-family:monospace !important; font-size:10px !important; color:#94a3b8 !important; border-bottom:1px solid #e2e8f0 !important; padding-bottom:8px !important; margin-bottom:24px !important; display:flex !important; justify-content:space-between !important; }
-        .pg-content img, .pg-content canvas { max-width:100% !important; height:auto !important; }
+        .pilot-wrapper { padding-top:80px !important; display:block !important; width: 100% !important; }
+        .pilot-page { background:#fff !important; margin:0 auto 24px auto !important; padding:0.5in !important; width:8.5in !important; min-height:11in !important; box-shadow:0 10px 25px rgba(0,0,0,0.1) !important; position:relative !important; overflow:visible !important; page-break-after:always !important; break-after:always !important; box-sizing:border-box !important; }
+        .chapter-start { page-break-before: always !important; break-before: always !important; margin-top: 0 !important; }
+        .chapter-title-block { border-bottom: 2px solid #0f172a !important; margin-bottom: 40px !important; padding-bottom: 12px !important; }
+        .chapter-title-block h1 { margin: 0 !important; font-size: 28px !important; color: #0f172a !important; font-family: serif !important; }
+        .pg-header { font-family:monospace !important; font-size:10px !important; color:#94a3b8 !important; border-bottom:1px solid #e2e8f0 !important; padding-bottom:8px !important; margin-bottom:24px !important; display:flex !important; justify-content:space-between !important; break-inside: avoid !important; }
+        .pg-content { position: relative !important; width: 100% !important; }
+        .pg-content img, .pg-content canvas, .pg-content svg { max-width:100% !important; height:auto !important; break-inside: avoid !important; display: block !important; margin: 10px auto !important; }
+        .pg-content h1, .pg-content h2, .pg-content h3 { break-after: avoid !important; break-inside: avoid !important; }
         @media print {
             @page { margin:0; size:letter; }
-            html, body { background:#fff !important; }
+            html, body { background:#fff !important; width: 100% !important; }
+            .no-print { display:none !important; }
             .pilot-toolbar { display:none !important; }
-            .pilot-wrapper { padding-top:0 !important; }
-            .pilot-page { margin:0 !important; padding:0.5in !important; max-width:100% !important; box-shadow:none !important; border:none !important; }
+            .pilot-wrapper { padding-top:0 !important; width: 100% !important; }
+            .pilot-page { margin:0 !important; padding:0.5in !important; width:100% !important; min-height:0 !important; box-shadow:none !important; border:none !important; page-break-after:always !important; break-after:always !important; }
         }
     </style>
     <style id="global-styles"></style>

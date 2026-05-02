@@ -137,54 +137,13 @@ chrome.storage.local.get(['printDataCache'], (result) => {
             let imageErrors = 0;
             try {
                 const p = validPages[i];
-                const currentPageText = p.meta.pageText || `Segment ${i+1}`;
-                const currentChapter = p.meta.chapter || 'Unknown';
                 
-                // 1. Determine if we should append to the previous page or start a new one
-                let targetDiv = null;
-                const lastDiv = container.lastElementChild;
-                const chapterChanged = lastDiv ? (lastDiv.getAttribute('data-chapter') !== currentChapter) : true;
-
-                if (lastDiv && !chapterChanged && lastDiv.getAttribute('data-page-id') === currentPageText) {
-                    targetDiv = lastDiv;
-                    log('UI', `Merging segment into same page: ${currentPageText}`);
-                } else {
-                    targetDiv = document.createElement('div');
-                    targetDiv.className = 'pilot-page';
-                    if (chapterChanged) targetDiv.classList.add('chapter-start');
-                    
-                    targetDiv.setAttribute('data-page-id', currentPageText);
-                    targetDiv.setAttribute('data-chapter', currentChapter);
-                    
-                    let chapterHeaderHtml = '';
-                    if (chapterChanged) {
-                        chapterHeaderHtml = `
-                            <div class="chapter-title-block">
-                                <h1>${currentChapter}</h1>
-                            </div>`;
-                    }
-
-                    targetDiv.innerHTML = `
-                        <div class="pg-header">
-                            <span>${currentChapter}</span>
-                            <span>${currentPageText}</span>
-                        </div>
-                        ${chapterHeaderHtml}
-                        <div class="pg-content"></div>`;
-                    container.appendChild(targetDiv);
-                }
-
-                const contentArea = targetDiv.querySelector('.pg-content');
-
                 // Create a temporary container to clean the HTML
                 currentStep = 'Parsing HTML content';
                 const temp = document.createElement('div');
                 temp.innerHTML = p.html;
                 
-                // [NO CHANGE TO IMAGE EXTRACTION LOGIC...]
-                // (I will keep the logic below but wrap it in the new contentArea append)
-                
-                // ... cleaning logic from original ...
+                // 0. Extract images from noscript tags (often used for lazy-loading fallbacks)
                 currentStep = 'Extracting images from noscript tags';
                 temp.querySelectorAll('noscript').forEach(noscript => {
                     const content = noscript.textContent || noscript.innerHTML;
@@ -284,8 +243,6 @@ chrome.storage.local.get(['printDataCache'], (result) => {
                             .replace(/position\s*:\s*(fixed|absolute|sticky)\s*;?/gi, 'position: relative;')
                             .replace(/overflow\s*:\s*(hidden|scroll|auto)\s*;?/gi, 'overflow: visible;')
                             .replace(/max-height\s*:\s*[^;]+;?/gi, 'max-height: none;')
-                            .replace(/height\s*:\s*[^;]+;?/gi, 'height: auto !important;')
-                            .replace(/min-height\s*:\s*[^;]+;?/gi, 'min-height: none !important;')
                             .replace(/transform\s*:\s*[^;]+;?/gi, 'transform: none;')
                             .replace(/transition\s*:\s*[^;]+;?/gi, 'transition: none;');
                         
@@ -368,20 +325,21 @@ chrome.storage.local.get(['printDataCache'], (result) => {
                 }
 
                 currentStep = 'Building final page DOM';
-                const wrapper = document.createElement('div');
-                wrapper.className = 'pg-segment';
-                wrapper.style.marginBottom = '20px';
-                wrapper.innerHTML = temp.innerHTML;
+                const div = document.createElement('div');
+                div.className = 'pilot-page';
                 
-                contentArea.appendChild(wrapper);
-                
-                // Update header if there are warnings
+                let warningHtml = '';
                 if (imageErrors > 0) {
-                    const status = targetDiv.querySelector('.pg-header span:last-child');
-                    if (status && !status.innerHTML.includes('⚠️')) {
-                        status.innerHTML += ` <span style="color:#f59e0b;font-size:10px" title="${imageErrors} images failed">⚠️</span>`;
-                    }
+                    warningHtml = `<span style="color: #f59e0b; font-size: 10px; margin-left: 8px; font-weight: normal;" title="${imageErrors} image(s) failed to resolve">⚠️ ${imageErrors} image issue(s)</span>`;
                 }
+
+                div.innerHTML = `
+                    <div class="pg-header">
+                        <span>${p.meta.chapter}</span>
+                        <span>${p.meta.pageText} &nbsp;|&nbsp; SEQ ${i + 1} ${warningHtml}</span>
+                    </div>
+                    <div class="pg-content">${temp.innerHTML}</div>`;
+                container.appendChild(div);
             } catch (err) {
                 console.error(`Error rendering page ${i + 1} during '${currentStep}':`, err);
                 const errorDiv = document.createElement('div');

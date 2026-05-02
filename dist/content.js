@@ -141,7 +141,7 @@ function getPureContentText(el) {
     uiSelectors.forEach(sel => {
         clone.querySelectorAll(sel).forEach(node => node.remove());
     });
-    return (clone.innerText || clone.textContent || '').trim();
+    return (clone.innerText || clone.textContent || '').replace(/[^a-zA-Z0-9]/g, '');
 }
 
 function isContentValid(el) {
@@ -163,19 +163,6 @@ function isContentValid(el) {
         return false;
     }
     const pureText = getPureContentText(el);
-    // Ignore data-strings that look like byte arrays (comma-separated numbers)
-    if (pureText.length > 30 && /^[0-9,\s:]+$/.test(pureText.substring(0, 50))) return false;
-    
-    // VOCABULARY CHECK: If text is long but has no spaces, it's likely a token/placeholder
-    // [FIX] Exclude common non-space-using scripts (Chinese, Japanese, Korean)
-    const hasNonLatin = /[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uff9f\u4e00-\u9faf\uac00-\ud7af]/.test(pureText);
-    
-    if (pureText.length > 60 && !pureText.includes(' ') && !hasNonLatin) return false;
-    
-    // Ratio check: 1 space per 50 chars is very generous for dense technical text
-    const spaceCount = (pureText.match(/ /g) || []).length;
-    if (pureText.length > 150 && spaceCount < (pureText.length / 50) && !hasNonLatin) return false; 
-
     if (pureText.length >= 100) return true; 
     if (containsValidMedia(el)) return true;
     const iframes = el.tagName === 'IFRAME' ? [el] : Array.from(el.querySelectorAll('iframe'));
@@ -226,17 +213,7 @@ function getFingerprintSource(el) {
 }
 
 const CONTENT_SELECTORS = [
-    '#epub-content-container', 'section.chapter-rw', '.mosaic-page', '.epub-container',
-    '.vst-main', 'main[role="main"]', '.vst-cover', '.cover-image', '.book-cover', 
-    '.front-matter', 'img[alt*="cover" i]'
-];
-
-const UNWANTED_SELECTORS = [
-    '.pbk-page-header', '.vst-navigation-header', '.epub-running-head', 
-    '.epub-running-hf', '.epub-running-foot', '.vst-sidebar-ignore',
-    '.breadcrumb', '.page-heading-nav', '.vst-breadcrumbs', '.vst-tooltip',
-    '.sr-only', '.visually-hidden', '.assistive-text', '[aria-hidden="true"]',
-    '#page-number-input', '.page-number-display', '.reader-toolbar', '.site-nav'
+    '#epub-content-container', 'section.chapter-rw', '.mosaic-page', '.epub-container'
 ];
 
 function autoDetectContent(force = false) {
@@ -272,12 +249,6 @@ function cleanAndResolveHTML(node) {
     const wrapper = document.createElement('div');
     wrapper.appendChild(node.cloneNode(true));
     wrapper.querySelectorAll('#pilot-root').forEach(el => el.remove());
-    
-    // NUKE UNWANTED RECURRING HEADERS/NAV
-    UNWANTED_SELECTORS.forEach(sel => {
-        wrapper.querySelectorAll(sel).forEach(el => el.remove());
-    });
-
     const resolve = url => {
         if (!url || url.startsWith('data:') || url.startsWith('http')) return url;
         try { return new URL(url, location.href).href; } catch (e) { return url; }
@@ -329,31 +300,10 @@ function cleanAndResolveHTML(node) {
             log('ERROR', 'Canvas CORS taint - cannot export to image.', e);
         }
     }
-    ['__hrp__', '.vstskip', '.vst-ignore', 'script', 'button', 'template', 
-     '.sc-czWrlN', '.Tooltip__tooltip', '.sr-only', '.visually-hidden', 
-     '.assistive-text', '[aria-hidden="true"]', '[role="tooltip"]'].forEach(sel => {
+    ['__hrp__', '.vstskip', '.vst-ignore', 'script', 'button', 'template', '.sc-czWrlN', '.Tooltip__tooltip'].forEach(sel => {
         wrapper.querySelectorAll(sel).forEach(el => el.remove());
     });
-
-    // SCRUB WATERMARK CANDIDATES & UI NOISE
     wrapper.querySelectorAll('*').forEach(el => {
-        // Remove elements that are meant to be hidden from users
-        const style = el.getAttribute('style') || '';
-        if (style.includes('display: none') || style.includes('visibility: hidden')) {
-            el.remove();
-            return;
-        }
-
-        // Remove typical "hidden watermark" or "ui label" containers
-        const text = (el.textContent || '').trim();
-        // If text is a long single word (no spaces) but isn't code, it might be a hash/watermark
-        if (text.length > 30 && !text.includes(' ') && el.children.length === 0) {
-            if (!/^[a-zA-Z0-9+/=]+$/.test(text)) { // Not clearly base64, so maybe random noise
-                 el.remove();
-                 return;
-            }
-        }
-
         Array.from(el.attributes).forEach(attr => {
             if (/^(rtrvr-|mosaic-|data-)/.test(attr.name)) el.removeAttribute(attr.name);
         });
@@ -365,7 +315,7 @@ let capturedPageCount = 0;
 let isScraping = false;
 let autoPilot = false;
 let customSelector = null;
-let sessionHashes = new Set();
+let lastContentFP = '';   
 let lastFlipTime = 0;
 let isSnapping = false;
 let flipDelay = 1200; 
@@ -399,10 +349,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 autoPilot  = newVal.state;
                 flipDelay  = newVal.speed || flipDelay;
                 autoPilotStopPage = newVal.stopPage || null;
-                if (isScraping) {
-                    sessionHashes.clear(); // Fresh start for new scrape session
-                    scheduleSnap(500);
-                }
+                if (isScraping) scheduleSnap(500);
                 break;
             case 'SET_SPEED':
                 flipDelay = newVal.speed || flipDelay;
@@ -547,24 +494,21 @@ function triggerNext() {
     }
     
     // Explicitly schedule the next snap to ensure the loop continues even if mutations are missed
-    // Explicitly schedule the next snap to ensure the loop continues even if mutations are missed
     const lastP = getCurrentPageValue();
-    let moveRetries = 0;
-    const checkMove = setInterval(() => {
-        if (!autoPilot || !isScraping) { clearInterval(checkMove); return; }
-        const currentP = getCurrentPageValue();
-        if (currentP !== lastP) {
-            log('NAV', `Page advanced: ${lastP} -> ${currentP}`);
-            clearInterval(checkMove);
-            return;
+    setTimeout(() => {
+        if (autoPilot && isScraping) {
+            const currentP = getCurrentPageValue();
+            if (currentP === lastP && lastP !== null) {
+                log('NAV', 'No page movement detected (stuck at ' + currentP + '). Stopping sweep.');
+                autoPilot = false;
+                isScraping = false;
+                safeSend({ type: 'CHAPTER_COMPLETE', page: currentP, status: 'EOF' });
+                return;
+            }
+            log('NAV', 'Explicitly triggering next snap cycle.');
+            safeSend({ type: 'RELAY_SNAP' });
         }
-        moveRetries++;
-        if (moveRetries > 8) { // Wait roughly 4s (8 * 500ms)
-            log('NAV', 'No page movement detected after retries. Nudge recovery.');
-            clearInterval(checkMove);
-            triggerNext(); // Double-tap nudge
-        }
-    }, 500);
+    }, flipDelay + 500);
 }
 
 // Removed goToFirstPage - navigation is now manifest-driven.
@@ -664,15 +608,6 @@ function snapWithRetry(attempt = 0, force = false) {
     if (target && !force) {
         const currentFP = quickHash(getFingerprintSource(target));
         
-        // CHECK: Is the content still in "token" or "placeholder" state?
-        // We only wait for a few cycles before giving up (might be false positive)
-        if (!isContentValid(target) && attempt < 4) {
-            _stabilizeReady = false;
-            log('SENSOR', `Content looks like placeholders/tokens (Attempt ${attempt}/4). Waiting...`);
-            setTimeout(() => snapWithRetry(attempt + 1, force), 600);
-            return;
-        }
-
         if (currentFP !== _lastStabilizeFP) {
             _lastStabilizeFP = currentFP;
             _stabilizeReady = false;
@@ -787,37 +722,17 @@ const snap = (target, finalHtml, force = false) => {
         // Final safety check for chapter string
         if (!chapter || chapter === 'undefined') chapter = 'Active Chapter';
 
-        const sourceText  = getFingerprintSource(target);
-        const textHash    = quickHash(getPureContentText(target));
-        const signature   = quickHash(sourceText);
+        const sourceText = getFingerprintSource(target);
+        const signature  = quickHash(sourceText) + (force ? '-forced-' + Date.now() : '');
 
-        if (!force) {
-            // Level 1: Same exact DOM structure as 500ms ago? (Prevents stutter)
-            if (signature === lastContentFP) {
-                log('DATA', 'Duplicate DOM fingerprint — skipping.');
-                isSnapping = false;
-                return;
-            }
-            
-            // Level 2: Have we seen this exact text content ANYWHERE in this session?
-            // This is the "Hard" deduplication fix.
-            if (sessionHashes.has(textHash)) {
-                log('DATA', `Duplicate filtered by Session History. Hash: ${textHash}`);
-                isSnapping = false;
-                hasSnappedCurrentPage = true; // Mark as done so we flip
-                return;
-            }
+        if (!force && signature === lastContentFP) {
+            log('DATA', 'Duplicate fingerprint — skipping (use Force Snap to override).');
+            return;
         }
 
         lastContentFP = signature;
-        sessionHashes.add(textHash);
-
-        lastContentFP = signature;
-        lastTextHash = textHash;
         hasSnappedCurrentPage = true; 
         log('DATA', `Page: ${pageText} | Ch: ${chapter} | FP: ${signature}`);
-        
-        showVisualConfirmation(pageText);
 
         const styles = capturedPageCount === 0 ? getAbsoluteStyles() : '';
         capturedPageCount++;
@@ -1034,33 +949,6 @@ window.addEventListener('beforeunload', () => {
 
 sendPulse();
 setInterval(sendPulse, 5000);
-
-function showVisualConfirmation(label) {
-    const toast = document.createElement('div');
-    toast.id = 'pilot-confirmation';
-    Object.assign(toast.style, {
-        position: 'fixed', top: '20px', left: '20px', zIndex: '2147483647',
-        background: '#10b981', color: 'white', padding: '12px 20px',
-        borderRadius: '12px', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.4)',
-        fontFamily: 'Inter, sans-serif', fontWeight: 'bold', fontSize: '14px',
-        display: 'flex', alignItems: 'center', gap: '10px',
-        transition: 'all 0.4s ease', transform: 'translateY(-100px)', opacity: '0'
-    });
-    toast.innerHTML = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-        Captured: ${label}
-    `;
-    document.body.appendChild(toast);
-    requestAnimationFrame(() => {
-        toast.style.transform = 'translateY(0)';
-        toast.style.opacity = '1';
-    });
-    setTimeout(() => {
-        toast.style.transform = 'translateY(-20px)';
-        toast.style.opacity = '0';
-        setTimeout(() => toast.remove(), 500);
-    }, 2000);
-}
 
 function getCurrentPageValue() {
     const input = document.querySelector('input[class*="InputControl__input"]');

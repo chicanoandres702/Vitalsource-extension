@@ -419,7 +419,7 @@ btnRecon.onclick = () => {
             temp.querySelectorAll(s).forEach(n => n.remove());
         });
 
-        const pureText     = (temp.textContent || '').trim();
+        const pureText     = (temp.textContent || '').replace(/[^a-zA-Z0-9]/g, '');
         let   hasValidMedia = false;
 
         temp.querySelectorAll('img, canvas, svg, iframe').forEach(m => {
