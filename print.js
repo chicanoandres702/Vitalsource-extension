@@ -173,17 +173,91 @@ chrome.storage.local.get(['printDataCache'], (result) => {
                 const p = validPages[i];
                 const currentPageText = p.meta.pageText || `Segment ${i+1}`;
                 const currentChapter = p.meta.chapter || 'Unknown';
+
+                // 1. Pre-process and check for blank content
+                currentStep = 'Pre-parsing HTML content';
+                const temp = document.createElement('div');
+                temp.innerHTML = p.html;
+
+                // Strip non-essential elements immediately
+                const stripSelectors = [
+                    'script', 'style', 'noscript', 'iframe', 'video', 'audio', 'object', 'embed',
+                    'form', 'button', 'input', 'textarea', 'select', 'dialog', 'nav', 'footer',
+                    '[role="dialog"]', '[role="alert"]', '[role="banner"]', '[role="navigation"]',
+                    '.cookie-banner', '.popup', '.modal', '.advertisement', '.ads', '.social-share',
+                    '#cookie-notice', '#gdpr', '.spinner', '[aria-busy="true"]', 'aside', '.vitalsource-ui'
+                ];
+                temp.querySelectorAll(stripSelectors.join(', ')).forEach(el => el.remove());
+
+                // Visibility check (blank detection)
+                const textClone = temp.cloneNode(true);
+                textClone.querySelectorAll('.sr-only, [style*="display: none"], [style*="visibility: hidden"], [hidden]').forEach(el => el.remove());
+                const visibleTextContent = textClone.textContent.replace(/\s+/g, '').trim();
+
+                let hasSignificantMedia = false;
+                const imgs = temp.querySelectorAll('img');
+                for (const img of imgs) {
+                    if (img.src && !img.src.includes('tracker') && !img.src.includes('pixel')) {
+                        hasSignificantMedia = true;
+                        break;
+                    }
+                }
+                if (!hasSignificantMedia) {
+                    const otherMedia = temp.querySelector('canvas, picture, video, audio, iframe, object, embed');
+                    if (otherMedia) hasSignificantMedia = true;
+                }
+                if (!hasSignificantMedia) {
+                    const svgs = temp.querySelectorAll('svg');
+                    for (const svg of svgs) {
+                        const width = svg.getAttribute('width') || svg.style.width;
+                        const height = svg.getAttribute('height') || svg.style.height;
+                        if ((!width || parseInt(width) > 24) && (!height || parseInt(height) > 24)) {
+                            hasSignificantMedia = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (visibleTextContent.length < 30 && !hasSignificantMedia) {
+                    totalStrippedCount++;
+                    updateEraseNotice();
+                    continue; // SKIP COMPLETELY
+                }
+
+                // 2. Resolve URLs and Styles
+                const baseUrl = p.meta.url || 'https://example.com';
+                const baseOrigin = new URL(baseUrl).origin;
+                const lazyAttributes = ['data-original', 'data-src', 'data-lazy-src', 'data-url', 'lazy-src', 'src'];
                 
-                // 1. Determine if we should append to the previous page or start a new one
+                temp.querySelectorAll('img, source, picture').forEach(el => {
+                    if (el.tagName === 'IMG' || el.tagName === 'SOURCE') {
+                        let bestSrc = null;
+                        for (const attr of lazyAttributes) {
+                            const val = el.getAttribute(attr);
+                            if (val && val !== 'null' && val !== 'undefined') {
+                                bestSrc = val;
+                                break;
+                            }
+                        }
+                        if (bestSrc) {
+                            if (bestSrc.startsWith('data:')) {
+                                el.src = bestSrc;
+                            } else {
+                                try { el.src = new URL(bestSrc, baseUrl).href; } catch(e) {}
+                            }
+                        }
+                        el.removeAttribute('srcset');
+                        el.removeAttribute('loading');
+                    }
+                });
+
+                // 3. Determine target container
                 let targetDiv = null;
                 const lastDiv = container.lastElementChild;
                 const chapterChanged = lastDiv ? (lastDiv.getAttribute('data-chapter') !== currentChapter) : true;
 
                 if (lastDiv && !chapterChanged) {
                     targetDiv = lastDiv;
-                    log('UI', `Merging segment into same chapter: ${currentChapter}`);
-                    
-                    // Add an inline marker for the page boundary
                     const inlineHeader = document.createElement('div');
                     inlineHeader.style.cssText = 'text-align:right; font-size:10px; color:#94a3b8; border-top:1px dashed #e2e8f0; margin-top:24px; padding-top:8px; margin-bottom:16px; font-family:monospace; break-before:auto;';
                     inlineHeader.textContent = currentPageText;
@@ -192,214 +266,19 @@ chrome.storage.local.get(['printDataCache'], (result) => {
                     targetDiv = document.createElement('div');
                     targetDiv.className = 'pilot-page';
                     if (chapterChanged) targetDiv.classList.add('chapter-start');
-                    
                     targetDiv.setAttribute('data-page-id', currentPageText);
                     targetDiv.setAttribute('data-chapter', currentChapter);
-                    
                     targetDiv.innerHTML = `<div class="pg-content"></div>`;
                     container.appendChild(targetDiv);
                 }
 
+                // 4. Append clean content
                 const contentArea = targetDiv.querySelector('.pg-content');
-
-                // Create a temporary container to clean the HTML
-                currentStep = 'Parsing HTML content';
-                const temp = document.createElement('div');
-                temp.innerHTML = p.html;
-                
-                // [NO CHANGE TO IMAGE EXTRACTION LOGIC...]
-                // (I will keep the logic below but wrap it in the new contentArea append)
-                
-                // ... cleaning logic from original ...
-                currentStep = 'Extracting images from noscript tags';
-                temp.querySelectorAll('noscript').forEach(noscript => {
-                    const content = noscript.textContent || noscript.innerHTML;
-                    if (content.includes('<img')) {
-                        const tempDoc = new DOMParser().parseFromString(content, 'text/html');
-                        const imgs = tempDoc.querySelectorAll('img');
-                        if (imgs.length > 0) {
-                            const wrapper = document.createElement('div');
-                            imgs.forEach(img => wrapper.appendChild(img));
-                            noscript.parentNode.insertBefore(wrapper, noscript);
-                        }
-                    }
-                });
-
-                // 1. Fix image URLs and lazy loading
-                currentStep = 'Resolving image URLs and fixing lazy loading';
-                const baseUrl = p.meta.url || 'https://example.com';
-                const baseOrigin = new URL(baseUrl).origin;
-                const lazyAttributes = ['data-original', 'data-src', 'data-lazy-src', 'data-url', 'lazy-src', 'src'];
-                
-                temp.querySelectorAll('img, source, picture').forEach(el => {
-                    if (el.tagName === 'IMG' || el.tagName === 'SOURCE') {
-                        let bestSrc = null;
-                        const originalSrc = el.getAttribute('src');
-                        
-                        for (const attr of lazyAttributes) {
-                            const val = el.getAttribute(attr);
-                            if (val && val !== 'null' && val !== 'undefined') {
-                                bestSrc = val;
-                                break;
-                            }
-                        }
-                        
-                        if (bestSrc) {
-                            if (bestSrc.startsWith('data:')) {
-                                el.src = bestSrc;
-                            } else {
-                                try {
-                                    el.src = new URL(bestSrc, baseUrl).href;
-                                    
-                                    // Set up fallbacks for retry mechanism
-                                    const fallbacks = [];
-                                    
-                                    // Fallback 1: Try the original src if it was different
-                                    if (originalSrc && originalSrc !== bestSrc && !originalSrc.startsWith('data:')) {
-                                        try {
-                                            const origUrl = new URL(originalSrc, baseUrl).href;
-                                            if (origUrl !== el.src) fallbacks.push(origUrl);
-                                        } catch(e) {}
-                                    }
-                                    
-                                    // Fallback 2: Try resolving against the root origin
-                                    try {
-                                        const originUrl = new URL(bestSrc, baseOrigin).href;
-                                        if (originUrl !== el.src && !fallbacks.includes(originUrl)) {
-                                            fallbacks.push(originUrl);
-                                        }
-                                    } catch(e) {}
-                                    
-                                    if (fallbacks.length > 0) {
-                                        el.setAttribute('data-fallback-urls', JSON.stringify(fallbacks));
-                                    }
-                                } catch(e) {
-                                    imageErrors++;
-                                    console.warn(`Could not resolve image URL: ${bestSrc}`);
-                                }
-                            }
-                        }
-                        el.removeAttribute('srcset'); // Remove srcset to force fallback to src
-                        el.removeAttribute('sizes');
-                        el.removeAttribute('loading'); // Disable native lazy loading
-                        
-                        // Clean up lazy attributes so they don't interfere
-                        lazyAttributes.forEach(attr => {
-                            if (attr !== 'src') el.removeAttribute(attr);
-                        });
-                    }
-                });
-
-                // 2. Strip non-essential elements
-                currentStep = 'Stripping non-essential elements';
-                const stripSelectors = [
-                    'script', 'style', 'noscript', 'iframe', 'video', 'audio', 'object', 'embed',
-                    'form', 'button', 'input', 'textarea', 'select', 'dialog', 'nav', 'footer',
-                    '[role="dialog"]', '[role="alert"]', '[role="banner"]', '[role="navigation"]',
-                    '.cookie-banner', '.popup', '.modal', '.advertisement', '.ads', '.social-share',
-                    '#cookie-notice', '#gdpr', '.spinner', '[aria-busy="true"]'
-                ];
-                temp.querySelectorAll(stripSelectors.join(', ')).forEach(el => el.remove());
-
-                // 3. Clean up inline styles that break PDF layouts and fix background images
-                currentStep = 'Cleaning up inline styles and background images';
-                temp.querySelectorAll('*').forEach(el => {
-                    const style = el.getAttribute('style');
-                    if (style) {
-                        let cleanedStyle = style
-                            .replace(/position\s*:\s*(fixed|absolute|sticky)\s*;?/gi, 'position: relative;')
-                            .replace(/overflow\s*:\s*(hidden|scroll|auto)\s*;?/gi, 'overflow: visible;')
-                            .replace(/max-height\s*:\s*[^;]+;?/gi, 'max-height: none;')
-                            .replace(/height\s*:\s*[^;]+;?/gi, 'height: auto !important;')
-                            .replace(/min-height\s*:\s*[^;]+;?/gi, 'min-height: none !important;')
-                            .replace(/transform\s*:\s*[^;]+;?/gi, 'transform: none;')
-                            .replace(/transition\s*:\s*[^;]+;?/gi, 'transition: none;');
-                        
-                        // Fix relative background image URLs
-                        cleanedStyle = cleanedStyle.replace(/url\(['"]?(.*?)['"]?\)/gi, (match, url) => {
-                            if (url && !url.startsWith('data:')) {
-                                try {
-                                    return `url('${new URL(url, baseUrl).href}')`;
-                                } catch(e) {
-                                    imageErrors++;
-                                    console.warn(`Could not resolve background image URL: ${url}`);
-                                }
-                            }
-                            return match;
-                        });
-                        
-                        el.setAttribute('style', cleanedStyle);
-                    }
-                });
-
-                // 4. Check if page is significantly blank
-                currentStep = 'Checking for blank content';
-                
-                // Remove invisible text (like screen reader text) before checking length
-                const textClone = temp.cloneNode(true);
-                textClone.querySelectorAll('.sr-only, [style*="display: none"], [style*="visibility: hidden"], [hidden]').forEach(el => el.remove());
-                const visibleTextContent = textClone.textContent.replace(/\s+/g, '').trim();
-                
-                // Check for significant media that indicates the page isn't blank
-                // We exclude tiny tracking pixels or decorative SVGs
-                let hasSignificantMedia = false;
-                
-                // Check images
-                const imgs = temp.querySelectorAll('img');
-                for (const img of imgs) {
-                    // If it has a real source and isn't explicitly tiny, count it
-                    if (img.src && !img.src.includes('tracker') && !img.src.includes('pixel')) {
-                        hasSignificantMedia = true;
-                        break;
-                    }
-                }
-                
-                // Check other media types
-                if (!hasSignificantMedia) {
-                    const otherMedia = temp.querySelector('canvas, picture, video, audio, iframe, object, embed');
-                    if (otherMedia) hasSignificantMedia = true;
-                }
-                
-                // Check for significant SVGs (not just tiny icons)
-                if (!hasSignificantMedia) {
-                    const svgs = temp.querySelectorAll('svg');
-                    for (const svg of svgs) {
-                        const width = svg.getAttribute('width') || svg.style.width;
-                        const height = svg.getAttribute('height') || svg.style.height;
-                        // If it has explicit dimensions that aren't tiny, or no explicit dimensions (might be responsive)
-                        if ((!width || parseInt(width) > 24) && (!height || parseInt(height) > 24)) {
-                            hasSignificantMedia = true;
-                            break;
-                        }
-                    }
-                }
-                
-                // Check for significant background images (excluding gradients or tiny patterns)
-                if (!hasSignificantMedia) {
-                    const bgElements = temp.querySelectorAll('[style*="background-image"]');
-                    for (const el of bgElements) {
-                        const bgImage = el.style.backgroundImage;
-                        if (bgImage && bgImage.includes('url(') && !bgImage.includes('data:image/svg+xml')) {
-                            hasSignificantMedia = true;
-                            break;
-                        }
-                    }
-                }
-                
-                // A page is considered blank if it has very little visible text AND no significant media
-                if (visibleTextContent.length < 30 && !hasSignificantMedia) {
-                    totalStrippedCount++;
-                    updateEraseNotice();
-                    continue; // Skip rendering this page
-                }
-
-                currentStep = 'Building final page DOM';
-                const wrapper = document.createElement('div');
-                wrapper.className = 'pg-segment';
-                wrapper.style.marginBottom = '20px';
-                wrapper.innerHTML = temp.innerHTML;
-                
-                contentArea.appendChild(wrapper);
+                const segment = document.createElement('div');
+                segment.className = 'pg-segment';
+                segment.style.marginBottom = '20px';
+                segment.innerHTML = temp.innerHTML;
+                contentArea.appendChild(segment);
                 
                 // Update header if there are warnings
                 if (imageErrors > 0) {

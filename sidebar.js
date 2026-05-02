@@ -435,50 +435,61 @@ btnRecon.onclick = () => {
     }
 
     const validPages = [];
+    const seenContent = new Set();
     let strippedCount = 0;
-    let currentChapter = null;
-
-    // 2. Sort pages by index if available, otherwise assume buffer order is correct
-    // (Vitalsource pages are usually snapped in order)
+    let dupCount = 0;
 
     sourcePages.forEach(p => {
+        // 1. Structural Cleanup
         const temp = document.createElement('div');
         temp.innerHTML = p.html;
 
-        // Cleanup
-        ['nav','header','footer','button','script','style','noscript','template',
-         '.spinner','[aria-busy="true"]','img[src*="spin"]'].forEach(s => {
+        const cleanSelectors = [
+            'nav','header','footer','button','script','style','noscript','template',
+            '.spinner','[aria-busy="true"]','img[src*="spin"]', 'aside', '.vitalsource-ui'
+        ];
+        cleanSelectors.forEach(s => {
             temp.querySelectorAll(s).forEach(n => n.remove());
         });
 
-        const pureText     = (temp.textContent || '').trim();
-        let   hasValidMedia = false;
+        // 2. Extract stats for fingerprinting & blank checking
+        // Collapse all whitespace to prevent minor spacing differences from bypassing the dup-check
+        const normalizedText = (temp.textContent || '').replace(/\s+/g, ' ').trim();
+        const imgCount = temp.querySelectorAll('img').length;
+        const mediaElements = temp.querySelectorAll('canvas, svg, iframe');
+        
+        // Fingerprint based ONLY on content (text + asset counts). 
+        // We ignore the page label to catch content that stutters across page boundaries.
+        const contentFingerprint = `${normalizedText.substring(0, 1000)}|${imgCount}|${mediaElements.length}`;
 
-        temp.querySelectorAll('img, canvas, svg, iframe').forEach(m => {
-            if (m.tagName === 'IMG' && !m.src.includes('data:image/gif;base64')) {
-                if (m.width > 20 || m.height > 20 || !m.width) hasValidMedia = true;
+        // 3. Mandatory Filter: Duplicate Check
+        if (contentFingerprint.length > 50 && seenContent.has(contentFingerprint)) {
+            dupCount++;
+            return;
+        }
+        if (contentFingerprint.length > 50) seenContent.add(contentFingerprint);
+
+        // 4. Blank Page Detection
+        let hasValidMedia = false;
+        temp.querySelectorAll('img').forEach(m => {
+            if (!m.src.includes('data:image/gif;base64')) {
+                const w = m.width || 0;
+                const h = m.height || 0;
+                if (w > 25 || h > 25 || !w) hasValidMedia = true; 
             }
-            if (m.tagName === 'CANVAS' && m.width > 50 && m.height > 50) hasValidMedia = true;
-            if (m.tagName === 'SVG' && m.innerHTML.length > 500)          hasValidMedia = true;
-            if (m.tagName === 'IFRAME')                                    hasValidMedia = true;
         });
+        if (mediaElements.length > 0) hasValidMedia = true;
 
-        if (pureText.length < 25 && !hasValidMedia) {
+        // If very little text AND no media, it's effectively a blank/stutter page
+        if (normalizedText.length < 30 && !hasValidMedia) {
             strippedCount++;
             return;
         }
 
-        // 3. Inject Chapter Heading if changed
-        if (p.meta.chapter !== currentChapter) {
-            currentChapter = p.meta.chapter;
-            const h = document.createElement('h1');
-            h.textContent = currentChapter;
-            h.style.cssText = 'page-break-before: always; margin-top: 40px; font-size: 24px; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px;';
-            validPages.push({ html: h.outerHTML, meta: { type: 'heading', title: currentChapter } });
-        }
-
         validPages.push(p);
     });
+
+    console.log(`[PilotPro] Assembly Complete: ${validPages.length} valid, ${strippedCount} blank, ${dupCount} dups.`);
 
     safeChrome(() => {
         chrome.storage.local.set(
