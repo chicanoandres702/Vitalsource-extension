@@ -179,9 +179,15 @@ chrome.storage.local.get(['printDataCache'], (result) => {
                 const lastDiv = container.lastElementChild;
                 const chapterChanged = lastDiv ? (lastDiv.getAttribute('data-chapter') !== currentChapter) : true;
 
-                if (lastDiv && !chapterChanged && lastDiv.getAttribute('data-page-id') === currentPageText) {
+                if (lastDiv && !chapterChanged) {
                     targetDiv = lastDiv;
-                    log('UI', `Merging segment into same page: ${currentPageText}`);
+                    log('UI', `Merging segment into same chapter: ${currentChapter}`);
+                    
+                    // Add an inline marker for the page boundary
+                    const inlineHeader = document.createElement('div');
+                    inlineHeader.style.cssText = 'text-align:right; font-size:10px; color:#94a3b8; border-top:1px dashed #e2e8f0; margin-top:24px; padding-top:8px; margin-bottom:16px; font-family:monospace; break-before:auto;';
+                    inlineHeader.textContent = currentPageText;
+                    targetDiv.querySelector('.pg-content').appendChild(inlineHeader);
                 } else {
                     targetDiv = document.createElement('div');
                     targetDiv.className = 'pilot-page';
@@ -190,21 +196,7 @@ chrome.storage.local.get(['printDataCache'], (result) => {
                     targetDiv.setAttribute('data-page-id', currentPageText);
                     targetDiv.setAttribute('data-chapter', currentChapter);
                     
-                    let chapterHeaderHtml = '';
-                    if (chapterChanged) {
-                        chapterHeaderHtml = `
-                            <div class="chapter-title-block">
-                                <h1>${currentChapter}</h1>
-                            </div>`;
-                    }
-
-                    targetDiv.innerHTML = `
-                        <div class="pg-header">
-                            <span>${currentChapter}</span>
-                            <span>${currentPageText}</span>
-                        </div>
-                        ${chapterHeaderHtml}
-                        <div class="pg-content"></div>`;
+                    targetDiv.innerHTML = `<div class="pg-content"></div>`;
                     container.appendChild(targetDiv);
                 }
 
