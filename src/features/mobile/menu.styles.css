@@ -1,0 +1,147 @@
+/* 
+ * Mobile Floating Menu Styles
+ * Premium glassmorphic design for Android devices.
+ */
+
+:root {
+    --mobile-primary:   #6366f1;
+    --mobile-success:   #10b981;
+    --mobile-danger:    #ef4444;
+    --mobile-glass:     rgba(15, 18, 35, 0.85);
+    --mobile-shadow:    0 8px 32px 0 rgba(0, 0, 0, 0.45);
+    --mobile-border:    rgba(99, 102, 241, 0.25);
+}
+
+#vst-mobile-fab {
+    position: fixed;
+    bottom: 24px;
+    right: 20px;
+    width: 52px;
+    height: 52px;
+    background: linear-gradient(135deg, #6366f1, #4f46e5);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 20px rgba(99, 102, 241, 0.5);
+    z-index: 10000;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    border: none;
+}
+
+#vst-mobile-fab:active {
+    transform: scale(0.9);
+    box-shadow: 0 2px 10px rgba(99, 102, 241, 0.4);
+}
+
+#vst-mobile-drawer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background: var(--mobile-glass);
+    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(20px);
+    border-top: 1px solid var(--mobile-border);
+    border-top-left-radius: 20px;
+    border-top-right-radius: 20px;
+    box-shadow: var(--mobile-shadow);
+    z-index: 10001;
+    transform: translateY(100%);
+    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    flex-direction: column;
+    padding: 16px 20px 28px;
+    max-height: 70vh;
+}
+
+#vst-mobile-drawer.open {
+    transform: translateY(0);
+}
+
+.vst-drawer-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.vst-drawer-header h2 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 700;
+    color: #e2e8f0;
+    letter-spacing: 0.04em;
+}
+
+#vst-close-drawer {
+    background: rgba(255,255,255,0.08);
+    border: none;
+    color: #94a3b8;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background 0.15s;
+}
+#vst-close-drawer:active { background: rgba(255,255,255,0.15); }
+
+.vst-drawer-content {
+    flex: 1;
+    overflow-y: auto;
+}
+
+/* ─── Mobile action buttons ─────────────────────────────────────────── */
+.btn-primary, .btn-secondary, .btn-danger {
+    border: none;
+    border-radius: 8px;
+    padding: 10px 18px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 0.04em;
+    transition: opacity 0.15s, transform 0.1s;
+    flex: 1;
+}
+.btn-primary:active, .btn-secondary:active, .btn-danger:active {
+    transform: scale(0.96);
+    opacity: 0.85;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #6366f1, #4f46e5);
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+}
+
+.btn-secondary {
+    background: rgba(255, 255, 255, 0.08);
+    color: #cbd5e1;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.btn-danger {
+    background: rgba(239, 68, 68, 0.15);
+    color: #fca5a5;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+/* ─── Mobile status text ────────────────────────────────────────────── */
+#vst-mobile-status {
+    margin-top: 16px;
+    padding: 10px 14px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 8px;
+    font-size: 12px;
+    color: #94a3b8;
+    font-family: monospace;
+    letter-spacing: 0.06em;
+}

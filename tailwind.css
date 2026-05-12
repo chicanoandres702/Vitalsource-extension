@@ -1,0 +1,174 @@
+/*
+ * tailwind.css — Hand-crafted minimal Tailwind-compatible utilities
+ * Covers every class referenced in sidebar.html and print.html.
+ * Generated to avoid requiring the full Tailwind CLI build step.
+ */
+
+/* ─── Reset / base ──────────────────────────────────────────────────── */
+*, ::before, ::after { box-sizing: border-box; }
+html { line-height: 1.5; -webkit-text-size-adjust: 100%; }
+
+/* ─── Display ────────────────────────────────────────────────────────── */
+.hidden           { display: none !important; }
+.block            { display: block; }
+.inline-block     { display: inline-block; }
+.inline           { display: inline; }
+.inline-flex      { display: inline-flex; }
+.flex             { display: flex; }
+.grid             { display: grid; }
+
+/* ─── Flex helpers ───────────────────────────────────────────────────── */
+.flex-col          { flex-direction: column; }
+.flex-row          { flex-direction: row; }
+.flex-1            { flex: 1 1 0%; }
+.flex-shrink-0     { flex-shrink: 0; }
+.items-center      { align-items: center; }
+.items-stretch     { align-items: stretch; }
+.justify-center    { justify-content: center; }
+.justify-between   { justify-content: space-between; }
+.justify-around    { justify-content: space-around; }
+
+/* ─── Gap ─────────────────────────────────────────────────────────────── */
+.gap-1   { gap: 0.25rem; }
+.gap-2   { gap: 0.5rem;  }
+.gap-3   { gap: 0.75rem; }
+.gap-4   { gap: 1rem;    }
+.gap-5   { gap: 1.25rem; }
+.gap-6   { gap: 1.5rem;  }
+
+/* ─── Sizing ──────────────────────────────────────────────────────────── */
+.w-full    { width: 100%; }
+.w-9       { width: 2.25rem; }
+.h-screen  { height: 100vh; }
+.max-w-md  { max-width: 28rem; }
+.h-5       { height: 1.25rem; }
+.w-8       { width: 2rem;  }
+.h-8       { height: 2rem; }
+.h-4       { height: 1rem; }
+.w-4       { width: 1rem;  }
+
+/* ─── Overflow ────────────────────────────────────────────────────────── */
+.overflow-hidden  { overflow: hidden; }
+.overflow-y-auto  { overflow-y: auto; }
+.truncate         { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ─── Position ────────────────────────────────────────────────────────── */
+.relative  { position: relative; }
+.absolute  { position: absolute; }
+.fixed     { position: fixed;    }
+.inset-0   { inset: 0; }
+.top-0     { top: 0;    }
+.right-0   { right: 0;  }
+
+/* ─── Spacing ─────────────────────────────────────────────────────────── */
+.p-3   { padding: 0.75rem; }
+.p-4   { padding: 1rem;    }
+.px-3  { padding-left: 0.75rem;  padding-right: 0.75rem; }
+.px-4  { padding-left: 1rem;     padding-right: 1rem;    }
+.py-2  { padding-top: 0.5rem;    padding-bottom: 0.5rem; }
+.px-1  { padding-left: 0.25rem;  padding-right: 0.25rem; }
+.pt-4  { padding-top: 1rem;    }
+.pb-3  { padding-bottom: 0.75rem; }
+.mt-2  { margin-top: 0.5rem;  }
+.mb-2  { margin-bottom: 0.5rem; }
+.mr-2  { margin-right: 0.5rem; }
+.ml-4  { margin-left: 1rem;    }
+.mx-auto { margin-left: auto; margin-right: auto; }
+
+/* ─── Typography ──────────────────────────────────────────────────────── */
+.text-xs     { font-size: 0.75rem;   line-height: 1rem; }
+.text-sm     { font-size: 0.875rem;  line-height: 1.25rem; }
+.text-base   { font-size: 1rem;      line-height: 1.5rem; }
+.text-lg     { font-size: 1.125rem;  line-height: 1.75rem; }
+.text-xl     { font-size: 1.25rem;   line-height: 1.75rem; }
+.text-2xl    { font-size: 1.5rem;    line-height: 2rem; }
+.font-medium { font-weight: 500; }
+.font-bold   { font-weight: 700; }
+.font-normal { font-weight: 400; }
+.tracking-wide     { letter-spacing: 0.025em; }
+.tracking-wider    { letter-spacing: 0.05em;  }
+.tracking-widest   { letter-spacing: 0.1em;   }
+.uppercase         { text-transform: uppercase; }
+.italic            { font-style: italic; }
+.text-center       { text-align: center; }
+.leading-none      { line-height: 1; }
+.whitespace-nowrap { white-space: nowrap; }
+
+/* ─── Arbitrary text sizes used in sidebar.html ──────────────────────── */
+.text-\[10px\]  { font-size: 10px; }
+.text-\[11px\]  { font-size: 11px; }
+.text-\[8px\]   { font-size: 8px;  }
+.text-\[7px\]   { font-size: 7px;  }
+.text-\[8\.5px\]{ font-size: 8.5px;}
+.text-\[9px\]   { font-size: 9px;  }
+.text-\[6\.5px\]{ font-size: 6.5px;}
+
+/* ─── Colors used in sidebar.html ────────────────────────────────────── */
+.text-white         { color: #fff; }
+.text-slate-300     { color: #cbd5e1; }
+.text-slate-400     { color: #94a3b8; }
+.text-slate-500     { color: #64748b; }
+.text-slate-600     { color: #475569; }
+.text-blue-400      { color: #60a5fa; }
+.text-red-400       { color: #f87171; }
+.text-red\/60       { color: rgba(255, 77, 109, 0.6); }
+.text-emerald       { color: #00e5a0; }
+.text-cyan-dim      { color: #007d8a; }
+.justify-around     { justify-content: space-around; }
+
+/* Hover variants (basic, no :hover pseudo on arbitrary values) */
+.hover\:text-cyan:hover   { color: #00d4e8; }
+.hover\:text-red:hover    { color: #ff4d6d; }
+.hover\:bg-white\/5:hover { background-color: rgba(255,255,255,0.05); }
+
+/* ─── Backgrounds ─────────────────────────────────────────────────────── */
+.bg-white\/5      { background-color: rgba(255,255,255,0.05); }
+.bg-blue-500      { background-color: #3b82f6; }
+.bg-slate-700     { background-color: #334155; }
+
+/* ─── Borders ─────────────────────────────────────────────────────────── */
+.rounded-full  { border-radius: 9999px; }
+.rounded-xl    { border-radius: 0.75rem; }
+.rounded-lg    { border-radius: 0.5rem; }
+.border-2      { border-width: 2px; }
+.border-transparent { border-color: transparent; }
+
+/* ─── Transform ───────────────────────────────────────────────────────── */
+.translate-x-0  { --tw-translate-x: 0; transform: translateX(0); }
+.translate-x-4  { --tw-translate-x: 1rem; transform: translateX(1rem); }
+
+/* ─── Transition ──────────────────────────────────────────────────────── */
+.transition-colors   { transition: color 0.15s, background-color 0.15s, border-color 0.15s; }
+.transition          { transition: all 0.15s; }
+.duration-200        { transition-duration: 0.2s; }
+.ease-in-out         { transition-timing-function: cubic-bezier(0.4,0,0.2,1); }
+
+/* ─── Pointer / Cursor ────────────────────────────────────────────────── */
+.cursor-pointer       { cursor: pointer; }
+.cursor-not-allowed   { cursor: not-allowed; }
+.pointer-events-none  { pointer-events: none; }
+
+/* ─── Shadow ──────────────────────────────────────────────────────────── */
+.shadow           { box-shadow: 0 1px 3px 0 rgba(0,0,0,0.1), 0 1px 2px -1px rgba(0,0,0,0.1); }
+.ring-0           { box-shadow: none; }
+
+/* ─── Opacity ─────────────────────────────────────────────────────────── */
+.opacity-50  { opacity: 0.5; }
+
+/* ─── Z-index ─────────────────────────────────────────────────────────── */
+.z-10  { z-index: 10; }
+.z-20  { z-index: 20; }
+
+/* ─── Object fit ──────────────────────────────────────────────────────── */
+.object-contain { object-fit: contain; }
+
+/* ─── Focus ───────────────────────────────────────────────────────────── */
+.focus\:outline-none:focus { outline: none; }
+
+/* ─── Mono font helper (used in sidebar.html via .mono class) ──────────── */
+.mono { font-family: 'IBM Plex Mono', monospace; }
+
+/* ─── No-print ────────────────────────────────────────────────────────── */
+@media print {
+    .no-print { display: none !important; }
+}
