@@ -1,461 +1,239 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <link rel="stylesheet" href="tailwind.css">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PilotPro HUD</title>
     <style>
         :root {
-            --bg-void:      #04060d;
-            --bg-deep:      #070b16;
-            --bg-panel:     rgba(7, 12, 26, 0.88);
-            --bg-raise:     rgba(14, 24, 52, 0.55);
-            --amber:        #f5a623;
-            --amber-glow:   rgba(245, 166, 35, 0.15);
-            --cyan:         #00d4e8;
-            --cyan-dim:     #007d8a;
-            --cyan-glow:    rgba(0, 212, 232, 0.12);
-            --emerald:      #00e5a0;
-            --emerald-glow: rgba(0, 229, 160, 0.12);
-            --red:          #ff4d6d;
-            --text-bright:  #dceeff;
-            --text-mid:     #6a82aa;
-            --text-dim:     #384a6a;
-            --border-lo:    rgba(80, 120, 220, 0.07);
-            --border-mid:   rgba(80, 120, 220, 0.16);
+            --bg-dark: #121212;
+            --bg-panel: #1e1e1e;
+            --cyan: #00f2ff;
+            --green: #00ff88;
+            --red: #ff4d4d;
+            --text: #e0e0e0;
+            --border: #333;
         }
-
-        * { box-sizing: border-box; }
 
         body {
-            font-family: 'Syne', sans-serif;
-            background: var(--bg-void);
-            color: var(--text-bright);
+            background-color: var(--bg-dark);
+            color: var(--text);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             margin: 0;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
             height: 100vh;
+            box-sizing: border-box;
             overflow: hidden;
-            -webkit-font-smoothing: antialiased;
-            overscroll-behavior-y: none;
         }
 
-        /* Scanline grid */
-        body::before {
-            content: '';
-            position: fixed; inset: 0;
-            background-image:
-                repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,212,232,0.012) 2px, rgba(0,212,232,0.012) 4px),
-                repeating-linear-gradient(90deg, transparent, transparent 44px, rgba(80,120,220,0.025) 44px, rgba(80,120,220,0.025) 45px);
-            pointer-events: none; z-index: 0;
-        }
-        /* Top atmosphere glow */
-        body::after {
-            content: '';
-            position: fixed; top: -80px; left: 50%; transform: translateX(-50%);
-            width: 320px; height: 180px;
-            background: radial-gradient(ellipse, rgba(0,212,232,0.1) 0%, transparent 70%);
-            pointer-events: none; z-index: 0;
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 8px;
+            margin-bottom: 12px;
         }
 
-        .mono { font-family: 'IBM Plex Mono', monospace; }
+        .logo {
+            font-weight: bold;
+            font-size: 1.2rem;
+            color: var(--cyan);
+            letter-spacing: 1px;
+        }
 
-        /* Panel base */
-        .panel {
+        .status-badge {
+            font-size: 0.7rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: #2a2a2a;
+            border: 1px solid var(--border);
+        }
+
+        .control-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        button {
             background: var(--bg-panel);
-            border: 1px solid var(--border-mid);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            position: relative;
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 10px 4px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
         }
 
-        /* HUD corner brackets */
-        .corners::before, .corners::after {
-            content: ''; position: absolute;
-            width: 9px; height: 9px; border-style: solid; border-color: var(--cyan-dim);
+        button:hover {
+            border-color: var(--cyan);
+            background: #2a2a2a;
         }
-        .corners::before { top: -1px; left: -1px; border-width: 2px 0 0 2px; }
-        .corners::after  { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; }
 
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 3px; }
+        button:active {
+            transform: scale(0.98);
+        }
+
+        .btn-primary { border-color: var(--cyan); color: var(--cyan); }
+        .btn-success { border-color: var(--green); color: var(--green); }
+        .btn-danger { border-color: var(--red); color: var(--red); }
+        
+        .full-width { grid-column: span 2; }
+
+        .vessel-info {
+            background: var(--bg-panel);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 0.8rem;
+            margin-bottom: 12px;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 4px;
+        }
+
+        .info-label { color: #888; }
+        .info-value { color: var(--cyan); font-family: monospace; }
+
+        .progress-container {
+            margin-bottom: 16px;
+        }
+
+        .progress-bar-bg {
+            background: #2a2a2a;
+            height: 6px;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 6px;
+        }
+
+        .progress-bar-fill {
+            background: linear-gradient(90deg, var(--cyan), var(--green));
+            height: 100%;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .toc-container {
+            flex: 1;
+            background: var(--bg-panel);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow-y: auto;
+            padding: 8px;
+        }
+
+        .toc-title {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            color: #888;
+            margin-bottom: 8px;
+            padding-left: 4px;
+        }
+
+        /* Hierarchical TOC Styles */
+        .toc-list { list-style: none; padding: 0; margin: 0; }
+        .toc-item { margin-bottom: 4px; }
+        .toc-link {
+            display: block;
+            padding: 6px 8px;
+            border-radius: 4px;
+            text-decoration: none;
+            color: var(--text);
+            font-size: 0.85rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .toc-link:hover { background: #2a2a2a; color: var(--cyan); }
+        
+        /* Nesting based on levels */
+        .level-1 { padding-left: 12px; font-size: 0.8rem; opacity: 0.9; }
+        .level-2 { padding-left: 24px; font-size: 0.75rem; opacity: 0.8; }
+        .level-3 { padding-left: 36px; font-size: 0.7rem; opacity: 0.7; }
+
+        .footer {
+            margin-top: 12px;
+            font-size: 0.7rem;
+            color: #666;
+            text-align: center;
+        }
+
+        ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: var(--cyan-dim); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+        ::-webkit-scrollbar-thumb:hover { background: #444; }
 
-        /* Range slider */
-        input[type=range] { appearance: none; -webkit-appearance: none; width: 100%; height: 2px; background: var(--border-lo); outline: none; border-radius: 99px; }
-        input[type=range]::-webkit-slider-thumb {
-            -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%;
-            background: var(--amber); cursor: pointer; border: 2px solid var(--bg-void);
-            box-shadow: 0 0 10px var(--amber), 0 0 3px var(--amber);
-        }
-
-        button { min-height: 44px; touch-action: manipulation; font-family: 'Syne', sans-serif; cursor: pointer; border: none; background: none; }
-
-        /* ── Run button — locked via ID+inline style, MutationObserver keeps it ── */
-        #btn-run {
-            width: 100%; border-radius: 2px;
-            display: flex !important; align-items: center; justify-content: center; gap: 10px;
-            font-size: 11px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase;
-            font-family: 'Syne', sans-serif; min-height: 44px; position: relative;
-            transition: transform 0.15s, box-shadow 0.15s;
-        }
-        #btn-run:active { transform: scale(0.98); }
-
-        /* ── Assemble button — shown when sidebar.js removes .hidden class ── */
-        #btn-reconstruct {
-            width: 100%; border-radius: 2px;
-            align-items: center; justify-content: center; gap: 10px;
-            font-size: 11px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase;
-            font-family: 'Syne', sans-serif; min-height: 44px;
-            background: linear-gradient(135deg, #001a12, #002b1f) !important;
-            border: 1px solid var(--emerald) !important;
-            color: var(--emerald) !important;
-            box-shadow: 0 0 22px var(--emerald-glow), inset 0 1px 0 rgba(255,255,255,0.03) !important;
-            transition: transform 0.15s;
-        }
-        #btn-reconstruct:active { transform: scale(0.98); }
-        /* Hidden by Tailwind .hidden; revealed by sidebar.js removing it */
-        #btn-reconstruct:not(.hidden) { display: flex !important; }
-
-        /* ── Page log wrap — same hidden/show pattern ── */
-        #page-log-wrap:not(.hidden) {
-            display: flex !important; flex-direction: column; gap: 8px;
-        }
-
-        /* ── Views — sidebar.js toggles .hidden class ── */
-        #view-scraper:not(.hidden)    { display: flex !important; flex-direction: column; gap: 12px; padding-bottom: 16px; }
-        #view-extensions:not(.hidden) { display: flex !important; flex-direction: column; gap: 12px; padding-bottom: 16px; }
-
-        /* ── no-visual overlay — sidebar.js adds/removes .hidden ── */
-        /* No inline display style on element; hidden class hides it, absence shows it */
-
-        /* ── Secondary action buttons ── */
-        .btn-ghost {
-            background: var(--bg-raise); border: 1px solid var(--border-mid);
-            color: var(--text-mid); transition: all 0.15s;
-            font-size: 9px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
-        }
-        .btn-ghost:active { background: rgba(14,24,52,0.9); }
-        .btn-danger {
-            background: rgba(255,77,109,0.05); border: 1px solid rgba(255,77,109,0.22);
-            color: var(--red); transition: all 0.15s;
-            font-size: 9px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
-        }
-        .btn-danger:active { background: rgba(255,77,109,0.12); }
-
-        /* ── Nav active state — sidebar.js uses text-blue-400 / text-slate-500 ── */
-        #nav-scraper, #nav-extensions {
-            transition: color 0.2s, background 0.2s;
-            border-radius: 0;
-            font-size: 8px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase;
-            position: relative;
-        }
-        /* Override Tailwind text-blue-400 → our cyan */
-        #nav-scraper.text-blue-400,
-        #nav-extensions.text-blue-400 { color: var(--cyan) !important; }
-        #nav-scraper.text-slate-500,
-        #nav-extensions.text-slate-500 { color: var(--text-dim) !important; }
-        /* Active glow bar at top */
-        #nav-scraper.text-blue-400::after,
-        #nav-extensions.text-blue-400::after {
-            content: ''; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
-            width: 28px; height: 2px;
-            background: var(--cyan); box-shadow: 0 0 8px var(--cyan);
-            border-radius: 0 0 2px 2px;
-        }
-
-        /* ── Status badge — MutationObserver will style inline ── */
-        #status-badge {
-            display: inline-flex; align-items: center;
-            font-family: 'IBM Plex Mono', monospace;
-            font-size: 9px; font-weight: 600; letter-spacing: 0.12em;
-            padding: 3px 8px; border-radius: 2px;
-        }
-
-        /* ── Chips ── */
-        .chip { display:inline-flex; align-items:center; font-family:'IBM Plex Mono',monospace; font-size:9px; font-weight:600; letter-spacing:0.12em; padding:3px 8px; border-radius:2px; }
-        .chip-cyan    { background:var(--cyan-glow);    border:1px solid rgba(0,212,232,0.22);    color:var(--cyan); }
-        .chip-amber   { background:var(--amber-glow);   border:1px solid rgba(245,166,35,0.22);   color:var(--amber); }
-        .chip-emerald { background:var(--emerald-glow); border:1px solid rgba(0,229,160,0.22);    color:var(--emerald); }
-
-        /* ── Status dot pulse ── */
-        @keyframes pulse-ring {
-            0%   { box-shadow: 0 0 0 0 rgba(0,212,232,0.6); }
-            70%  { box-shadow: 0 0 0 5px rgba(0,212,232,0); }
-            100% { box-shadow: 0 0 0 0 rgba(0,212,232,0); }
-        }
-        .dot-pulse { animation: pulse-ring 2.2s ease-out infinite; }
-
-        /* ── Page flip flash ── */
-        .ping { animation: flash 0.4s ease; }
-        @keyframes flash { 0% { background: rgba(0,212,232,0.12); } 100% { background: transparent; } }
-
-        /* ── Preview iframe ── */
-        #preview-vp { transform: scale(0.25); transform-origin: top left; width: 400%; height: 400%; pointer-events: none; border: none; }
-        .vp-wrap {
-            width: 100%; height: 175px; overflow: hidden; border-radius: 2px;
-            border: 1px solid var(--border-mid); background: #fff; position: relative;
-            box-shadow: 0 0 30px rgba(0,0,0,0.6);
-        }
-        /* Scanline over preview */
-        .vp-wrap::after {
-            content:''; position:absolute; inset:0; pointer-events:none; z-index:2;
-            background: repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,0,0,0.07) 3px, rgba(0,0,0,0.07) 4px);
-        }
-        /* no-visual sits inside vp-wrap as absolute overlay */
-        #no-visual {
-            position: absolute; inset: 0; z-index: 3;
-            display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
-            background: var(--bg-deep);
-        }
-        /* Tailwind .hidden = display:none !important — sidebar.js adds this when image loads */
-
-        /* ── Misc labels ── */
-        .lbl { font-size:9px; font-weight:700; letter-spacing:0.18em; text-transform:uppercase; color:var(--text-dim); }
-        .div-h { height:1px; background:linear-gradient(90deg,transparent,var(--border-mid),transparent); }
-
-        /* ── Vessel card ── */
-        .vessel-card {
-            background: linear-gradient(140deg, rgba(0,212,232,0.04) 0%, rgba(7,12,26,0.92) 60%);
-            border: 1px solid var(--border-mid);
-        }
-
-        /* ── Page log rows (injected by sidebar.js) ── */
-        .page-log-item {
-            border-bottom: 1px solid var(--border-lo);
-            font-family: 'IBM Plex Mono', monospace;
-        }
-        .page-log-item:last-child { border-bottom: none; }
-
-        /* ── Chapter Hierarchy UI ── */
-        .chapter-header {
-            background: linear-gradient(90deg, rgba(0,212,232,0.08) 0%, transparent 100%);
-            border-left: 2px solid transparent;
-        }
-        .chapter-header:hover { background: rgba(0,212,232,0.12); border-left-color: var(--cyan); }
-        .chapter-header.selected { border-left-color: var(--cyan); background: rgba(0,212,232,0.15); }
-        
-        .page-item {
-            font-size: 8.5px;
-            letter-spacing: 0.02em;
-        }
-        .page-item:hover { color: var(--cyan-bright) !important; background: rgba(255,255,255,0.03); }
-        
-        .checkbox-inner { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
-        
-        /* Custom scrollbar for chapter list */
-        #chapter-list::-webkit-scrollbar { width: 4px; }
-        #chapter-list::-webkit-scrollbar-thumb { background: var(--border-mid); border-radius: 4px; }
     </style>
 </head>
+<body>
 
-<body class="flex flex-col h-screen w-full max-w-md mx-auto" style="position:relative; z-index:1;">
-
-<!-- ══ HEADER ══ -->
-<header class="panel flex-shrink-0 z-10 px-4 pt-4 pb-3" style="border-left:none;border-right:none;border-top:none;">
-    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
-        <div style="display:flex; align-items:center; gap:10px;">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--cyan);flex-shrink:0;">
-                <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="5"/>
-                <circle cx="12" cy="12" r="1.5" fill="currentColor"/>
-                <line x1="12" y1="2" x2="12" y2="7"/><line x1="12" y1="17" x2="12" y2="22"/>
-                <line x1="2" y1="12" x2="7" y2="12"/><line x1="17" y1="12" x2="22" y2="12"/>
-            </svg>
-            <div>
-                <div style="font-size:11px;font-weight:800;letter-spacing:0.26em;color:var(--text-bright);text-transform:uppercase;line-height:1.1;">PILOT PRO</div>
-                <div class="mono" style="font-size:8px;color:var(--text-dim);letter-spacing:0.1em;">AUTONOMOUS SCRAPE ENGINE</div>
-            </div>
-        </div>
-        <!-- status-badge: className replaced by sidebar.js; MutationObserver re-styles inline -->
-        <div id="status-badge" class="chip chip-cyan">STANDBY</div>
-    </div>
-    <div class="div-h" style="margin-bottom:10px;"></div>
-    <div style="display:flex; align-items:center; justify-content:space-between;">
-        <div style="display:flex; align-items:center; gap:6px;">
-            <div class="dot-pulse" style="width:6px;height:6px;border-radius:50%;background:var(--cyan);flex-shrink:0;"></div>
-            <div id="squadron" class="mono" style="font-size:10px;color:var(--cyan);">0 Frames</div>
-        </div>
-        <div id="vis-badge" class="mono" style="font-size:9px;color:var(--text-dim);letter-spacing:0.08em;">TAB ACTIVE</div>
-    </div>
-</header>
-
-<!-- ══ MAIN ══ -->
-<main class="flex-1 overflow-y-auto" style="padding:14px 14px 8px;">
-
-    <!-- SCRAPER VIEW — no .hidden class = visible on load; sidebar.js adds/removes .hidden -->
-    <div id="view-scraper">
-
-        <!-- [MOD] Streamlined Vessel Header -->
-        <div id="vessel-card" class="vessel-card corners" style="border-radius:2px;padding:12px;margin-bottom:8px;">
-            <div class="flex justify-between items-start mb-2">
-                <div class="lbl">▸ Status</div>
-                <div id="manifest-indicator" class="text-[8px] mono text-emerald hidden">✓ ONLINE</div>
-            </div>
-            <div id="vessel-id" class="mono text-[10px] text-bright truncate mb-1">Awaiting uplink...</div>
-            <div id="meta-info" class="mono text-[8px] text-dim line-clamp-1">Ready for initialize...</div>
-        </div>
-
-        <!-- Consolidated Action Bar -->
-        <div class="grid grid-cols-4 gap-2 mb-2">
-            <button id="btn-run" class="col-span-2 corners" style="min-height:38px; background:rgba(0,212,232,0.1); border:1px solid var(--cyan); color:var(--cyan); font-size:10px; font-weight:700; letter-spacing:0.16em;">⚡ INITIALIZE</button>
-            <button id="btn-stop" class="col-span-1 corners" style="min-height:38px; background:rgba(255,77,109,0.05); border:1px solid rgba(255,77,109,0.2); color:rgba(255,77,109,0.35); font-size:9px; font-weight:700; letter-spacing:0.1em; cursor:not-allowed; transition:all 0.2s;" disabled>STOP</button>
-            <button id="btn-snap" class="corners btn-ghost" style="min-height:38px;">SNAP</button>
-        </div>
-        <!-- Pick stays on its own slim row so layout stays clean -->
-        <div class="grid grid-cols-4 gap-2 mb-2">
-            <button id="btn-pick" class="col-span-1 corners btn-ghost" style="min-height:32px; font-size:8px;">PICK</button>
-            <button id="btn-autopick" class="col-span-1 corners btn-ghost" style="min-height:32px; font-size:8px;">AUTO</button>
-            <div id="run-status-text" class="col-span-2 mono flex items-center px-2" style="font-size:8px; color:var(--text-dim); letter-spacing:0.1em;">STANDBY — SELECT A MODE AND INITIALIZE</div>
-        </div>
-
-        <!-- Chapter Navigation / Manifest -->
-        <div id="chapter-nav-panel" class="panel corners mb-2" style="padding:10px;border-color:var(--cyan-glow);">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-                <div class="lbl" style="font-size:8px;">Protocol Range</div>
-                <div id="capture-mode-toggle" class="flex gap-1">
-                    <span id="mode-full" class="chip chip-cyan" style="cursor:pointer;padding:2px 5px;font-size:6.5px;">AUTO</span>
-                    <span id="mode-chapter" class="chip" style="cursor:pointer;opacity:0.4;padding:2px 5px;font-size:6.5px;">TOC</span>
-                    <span id="mode-manual" class="chip" style="cursor:pointer;opacity:0.4;padding:2px 5px;font-size:6.5px;">MANUAL</span>
-                </div>
-            </div>
-
-            <div class="relative mb-2">
-                <input id="chapter-search" type="text" placeholder="Search chapters..." class="w-full bg-void/50 border border-border-lo text-[10px] px-2 py-1.5 rounded focus:border-cyan/50 outline-none mono text-bright" style="background:rgba(0,0,0,0.3); border:1px solid var(--border-mid);">
-            </div>
-            
-            <div id="chapter-list-wrap" class="hidden">
-                <div id="chapter-list" style="max-height:160px;overflow-y:auto;background:var(--bg-deep);border:1px solid var(--border-lo);padding:2px;display:flex;flex-direction:column;gap:1px;">
-                </div>
-                <div class="flex justify-between items-center mt-2 px-1">
-                    <div id="selection-count" class="text-[8px] mono text-cyan-dim uppercase">0 SELECTED</div>
-                    <div class="flex gap-3">
-                        <button id="btn-select-all" class="text-[8px] mono text-cyan/60 hover:text-cyan uppercase">ALL</button>
-                        <button id="btn-deselect-all" class="text-[8px] mono text-red/60 hover:text-red uppercase">NONE</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Progress HUD (shown when engine is active) -->
-        <div id="active-progress-hud" class="hidden panel corners mb-2 p-3" style="background:rgba(0,212,232,0.03);border-color:rgba(0,212,232,0.2);">
-            <div class="flex justify-between items-center mb-2">
-                <span class="lbl">Capture Progress</span>
-                <span id="page-count-hud" class="mono text-[10px]" style="color:var(--cyan);">0 / 0</span>
-            </div>
-            <div class="w-full h-1 rounded-full overflow-hidden" style="background:var(--border-lo);">
-                <div id="progress-bar-fill" class="h-full transition-all duration-300" style="width:0%; background:var(--cyan); box-shadow:0 0 8px var(--cyan);"></div>
-            </div>
-        </div>
-
-        <div class="grid grid-cols-4 gap-2 mb-2">
-            <button id="btn-clear" class="col-span-1 corners btn-danger" style="min-height:38px;">CLEAR</button>
-            <button id="btn-reconstruct" class="col-span-3 corners bg-emerald/10 border border-emerald text-emerald hidden" style="min-height:38px;">ASSEMBLE ARCHIVE</button>
-        </div>
-
-
-
-        <!-- Speed -->
-        <div class="panel" style="border-radius:2px;padding:14px;">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
-                <div style="display:flex;align-items:center;gap:7px;">
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--amber);"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                    <span class="lbl">Flip Interval</span>
-                </div>
-                <span id="speed-label" class="chip chip-amber">1200ms</span>
-            </div>
-            <input id="speed-slider" type="range" min="600" max="4000" step="100" value="1200">
-            <div style="display:flex;justify-content:space-between;margin-top:8px;">
-                <span class="mono" style="font-size:9px;color:var(--text-dim);">600ms · FAST</span>
-                <span class="mono" style="font-size:9px;color:var(--text-dim);">4000ms · SAFE</span>
-            </div>
-        </div>
-
-        <!-- Preview -->
-        <div>
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-                <div style="display:flex;align-items:center;gap:7px;">
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--cyan);"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                    <span class="lbl">Visual Uplink</span>
-                </div>
-                <span id="page-count" class="chip chip-emerald">0 PAGES</span>
-            </div>
-            <div class="vp-wrap corners">
-                <iframe id="preview-vp" src="about:blank"></iframe>
-                <!--
-                    no-visual: NO inline display style.
-                    Visible by default (CSS sets display:flex).
-                    sidebar.js hides it with classList.add('hidden') → Tailwind display:none !important
-                -->
-                <div id="no-visual">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="color:var(--text-dim);opacity:0.4;"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                    <span class="mono" style="font-size:9px;color:var(--text-dim);letter-spacing:0.12em;">NO SIGNAL</span>
-                </div>
-            </div>
-        </div>
-
-        <!--
-            page-log-wrap: starts with .hidden (Tailwind display:none !important).
-            sidebar.js reveals via classList.remove('hidden').
-            CSS #page-log-wrap:not(.hidden) sets display:flex.
-            NO inline display style.
-        -->
-        <div id="page-log-wrap" class="hidden">
-            <div class="lbl">▸ Captured Pages</div>
-            <div id="page-log" class="panel" style="border-radius:2px;overflow:hidden;max-height:140px;overflow-y:auto;padding:4px;"></div>
-        </div>
-
-        <!-- Assembly spacer -->
-        <div style="padding-top:4px;"></div>
-
-    </div><!-- /view-scraper -->
-
-    <!-- [MOD] LIBRARY / HISTORY VIEW -->
-    <div id="view-library" class="hidden flex flex-col gap-3">
-        <div class="panel corners p-3">
-            <div class="lbl mb-1">▸ Archive Library</div>
-            <p class="mono text-[8px] text-dim">Local history of compiled vessels.</p>
-        </div>
-        <div id="history-list" class="flex flex-col gap-2 overflow-y-auto max-h-[400px]">
-            <div class="mono text-[9px] text-dim text-center py-10">NO PREVIOUS RIPS FOUND</div>
-        </div>
-        <button id="btn-clear-history" class="btn-danger w-full py-2 mt-2" style="font-size:8px;">PURGE ARCHIVE</button>
+    <div class="header">
+        <div class="logo">PILOTPRO</div>
+        <div class="status-badge" id="status-display">STANDBY</div>
     </div>
 
-    <!-- EXTENSIONS VIEW — starts hidden -->
-    <div id="view-extensions" class="hidden">
-        <div class="panel corners p-3 mb-3">
-            <div class="lbl mb-1">▸ System Config</div>
-            <p class="mono text-[8px] text-dim">Manage engine parameters.</p>
-        </div>
-        <div id="ext-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+    <div class="control-grid">
+        <button id="btn-run" class="btn-primary full-width">START AUTO-RIP</button>
+        <button id="btn-snap">SNAP PAGE</button>
+        <button id="btn-pick">PICK TARGET</button>
+        <button id="btn-autopick" class="full-width">AUTOPICK: ON</button>
+        
+        <!-- The Export and Clear actions -->
+        <button id="btn-export" class="btn-success">EXPORT BOOK</button>
+        <button id="btn-clear" class="btn-danger">CLEAR DATA</button>
+        
+        <!-- Backward compatibility button ID used in script -->
+        <button id="btn-reconstruct" style="display: none;"></button>
     </div>
 
-</main>
+    <div class="vessel-info">
+        <div class="info-row">
+            <span class="info-label">Active Sensors</span>
+            <span class="info-value" id="sensor-count">0</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">Current CFI</span>
+            <span class="info-value" id="cfi-display">none</span>
+        </div>
+    </div>
 
-<nav class="flex-shrink-0" style="display:flex;justify-content:space-around;align-items:stretch;background:var(--bg-deep);border-top:1px solid var(--border-mid);z-index:20;">
-    <button id="nav-scraper" class="text-blue-400" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;width:33%;padding:10px 0;background:none;border:none;">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-        <span style="font-size:7px;">ENGINE</span>
-    </button>
-    <div style="width:1px;background:var(--border-lo);margin:8px 0;"></div>
-    <button id="nav-library" class="text-slate-500" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;width:33%;padding:10px 0;background:none;border:none;">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-        <span style="font-size:7px;">LIBRARY</span>
-    </button>
-    <div style="width:1px;background:var(--border-lo);margin:8px 0;"></div>
-    <button id="nav-extensions" class="text-slate-500" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;width:33%;padding:10px 0;background:none;border:none;">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-        <span style="font-size:7px;">CONFIG</span>
-    </button>
-</nav>
+    <div class="progress-container">
+        <div class="info-row">
+            <span class="info-label">Capture Progress</span>
+            <span class="info-value" id="progress-text">0 / 0</span>
+        </div>
+        <div class="progress-bar-bg">
+            <div class="progress-bar-fill" id="progress-fill"></div>
+        </div>
+    </div>
 
-<script src="sidebar-init.js"></script>
+    <div class="toc-title">Table of Contents</div>
+    <div class="toc-container">
+        <ul class="toc-list" id="toc-list">
+            <!-- Dynamically populated hierarchical list -->
+        </ul>
+    </div>
 
-<script src="src/features/ripping/queue.service.js"></script>
-<script src="src/features/ripping/watchdog.service.js"></script>
-<script src="src/features/ripping/storage.service.js"></script>
-<script src="src/features/ui/renderer.service.js"></script>
-<script src="sidebar.js"></script>
+    <div class="footer">
+        PILOTPRO ENGINE V2.5 // AUTONOMOUS MODE
+    </div>
+
+    <!-- Scripts are assumed to be loaded via the extension manifest or relative paths -->
+    <script src="storage.js"></script>
+    <script src="renderer.js"></script>
+    <script src="sidebar.js"></script>
 </body>
 </html>
