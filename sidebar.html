@@ -1,3 +1,6 @@
+/**
+ * filepath: sidebar.html
+ */
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -50,6 +53,7 @@
             border-radius: 4px;
             background: #2a2a2a;
             border: 1px solid var(--border);
+            text-transform: uppercase;
         }
 
         .control-grid {
@@ -72,6 +76,7 @@
             align-items: center;
             justify-content: center;
             gap: 6px;
+            font-weight: 600;
         }
 
         button:hover {
@@ -101,6 +106,7 @@
         .info-row {
             display: flex;
             justify-content: space-between;
+            align-items: center;
             margin-bottom: 4px;
         }
 
@@ -143,7 +149,6 @@
             padding-left: 4px;
         }
 
-        /* Hierarchical TOC Styles */
         .toc-list { list-style: none; padding: 0; margin: 0; }
         .toc-item { margin-bottom: 4px; }
         .toc-link {
@@ -158,11 +163,6 @@
             text-overflow: ellipsis;
         }
         .toc-link:hover { background: #2a2a2a; color: var(--cyan); }
-        
-        /* Nesting based on levels */
-        .level-1 { padding-left: 12px; font-size: 0.8rem; opacity: 0.9; }
-        .level-2 { padding-left: 24px; font-size: 0.75rem; opacity: 0.8; }
-        .level-3 { padding-left: 36px; font-size: 0.7rem; opacity: 0.7; }
 
         .footer {
             margin-top: 12px;
@@ -175,7 +175,6 @@
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
         ::-webkit-scrollbar-thumb:hover { background: #444; }
-
     </style>
 </head>
 <body>
@@ -191,12 +190,8 @@
         <button id="btn-pick">PICK TARGET</button>
         <button id="btn-autopick" class="full-width">AUTOPICK: ON</button>
         
-        <!-- The Export and Clear actions -->
         <button id="btn-export" class="btn-success">EXPORT BOOK</button>
         <button id="btn-clear" class="btn-danger">CLEAR DATA</button>
-        
-        <!-- Backward compatibility button ID used in script -->
-        <button id="btn-reconstruct" style="display: none;"></button>
     </div>
 
     <div class="vessel-info">
@@ -223,17 +218,15 @@
     <div class="toc-title">Table of Contents</div>
     <div class="toc-container">
         <ul class="toc-list" id="toc-list">
-            <!-- Dynamically populated hierarchical list -->
+            <!-- Dynamically populated via sidebar.js -->
         </ul>
     </div>
 
     <div class="footer">
-        PILOTPRO ENGINE V2.5 // AUTONOMOUS MODE
+        PILOTPRO ENGINE V2.5 // HUD MODE
     </div>
 
-    <!-- Scripts are assumed to be loaded via the extension manifest or relative paths -->
-    <script src="storage.js"></script>
-    <script src="renderer.js"></script>
-    <script src="sidebar.js"></script>
+    <!-- MANDATORY: type="module" enables ESM imports in sidebar.js -->
+    <script type="module" src="sidebar.js"></script>
 </body>
 </html>

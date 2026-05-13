@@ -1,78 +1,92 @@
-// Configure the side panel to open when the extension icon is clicked
+/**
+ * filepath: background.js
+ * PilotPro Master Orchestrator
+ * Handles: SidePanel lifecycle, Native PDF Printing, and Global Messaging
+ */
+
+// 1. Configure SidePanel to open on extension icon click
 chrome.sidePanel
   .setPanelBehavior({ openPanelOnActionClick: true })
-  .catch((error) => console.error(error));
+  .catch((error) => console.error('[PilotPro] SidePanel Init Error:', error));
 
-// Optionally, you can restrict the side panel to only be enabled on supported sites
+// 2. Streamlined SidePanel restriction to VitalSource/Capella domains
 chrome.tabs.onUpdated.addListener(async (tabId, info, tab) => {
-  if (!tab.url) return;
+  if (!tab.url || info.status !== 'loading') return;
   
   try {
     const url = new URL(tab.url);
-    const supportedHosts = [
+    const isSupported = [
       'bookshelf.vitalsource.com',
       'capella.vitalsource.com',
       'mosaic.vitalsource.com',
       'jigsaw.vitalsource.com'
-    ];
-    
-    if (supportedHosts.includes(url.hostname) || url.hostname.endsWith('.capella.edu')) {
-      // Enable the side panel for this specific tab
-      await chrome.sidePanel.setOptions({
-        tabId,
-        path: 'sidebar.html',
-        enabled: true
-      });
-    } else {
-      // Disable the side panel on unsupported sites to avoid confusion
-      await chrome.sidePanel.setOptions({
-        tabId,
-        enabled: false
-      });
-    }
+    ].includes(url.hostname) || url.hostname.endsWith('.capella.edu');
+
+    await chrome.sidePanel.setOptions({
+      tabId,
+      path: 'sidebar.html',
+      enabled: isSupported
+    });
   } catch (e) {
-    // Ignore invalid URLs (like chrome:// or about:blank)
+    // Silent fail for non-standard URLs
   }
 });
 
+// 3. Native PDF Creation & Message Handling
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  
   if (request.action === 'CREATE_NATIVE_PDF') {
     const targetTabId = sender.tab ? sender.tab.id : null;
+    
     if (!targetTabId) {
-      sendResponse({ success: false, error: 'No source tab available for PDF creation' });
+      sendResponse({ success: false, error: 'No source tab found for PDF generation' });
       return false;
     }
-    
+
+    // Use Chrome DevTools Protocol to print the page as a high-quality PDF
     chrome.debugger.attach({ tabId: targetTabId }, '1.3', () => {
       if (chrome.runtime.lastError) {
         sendResponse({ success: false, error: chrome.runtime.lastError.message });
         return;
       }
-      
-      chrome.debugger.sendCommand({ tabId: targetTabId }, 'Page.printToPDF', {
+
+      const printOptions = {
         landscape: false,
         displayHeaderFooter: false,
         printBackground: true,
-        marginTop: 0.5,
-        marginBottom: 0.5,
-        marginLeft: 0.5,
-        marginRight: 0.5,
+        marginTop: 0.2,
+        marginBottom: 0.2,
+        marginLeft: 0.2,
+        marginRight: 0.2,
         paperWidth: 8.5,
         paperHeight: 11,
         preferCSSPageSize: true,
         generateDocumentOutline: true
-      }, (result) => {
+      };
+
+      chrome.debugger.sendCommand({ tabId: targetTabId }, 'Page.printToPDF', printOptions, (result) => {
+        // Always detach immediately after command
         chrome.debugger.detach({ tabId: targetTabId });
+        
         if (chrome.runtime.lastError) {
           sendResponse({ success: false, error: chrome.runtime.lastError.message });
-        } else if (result.data) {
+        } else if (result && result.data) {
           sendResponse({ success: true, pdfData: result.data });
         } else {
-          sendResponse({ success: false, error: 'Empty result from printToPDF' });
+          sendResponse({ success: false, error: 'Failed to generate PDF data' });
         }
       });
     });
-    return true; // Keep message channel open for async sendResponse
+    return true; // Keep channel open for async response
   }
-  return false; // Not handled here
+
+  // Handle generic stats relay from content to sidebar
+  if (request.type === 'PILOT_PAGE_CAPTURED') {
+    // This allows the sidebar to refresh without the background script needing to manage storage
+    console.log('[PilotPro] Broadcast: Capture Event');
+  }
+
+  return false;
 });
+
+console.log('[PilotPro] Engine v10.0 Online');

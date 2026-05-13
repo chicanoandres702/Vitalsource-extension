@@ -2,8 +2,17 @@
   "manifest_version": 3,
   "name": "VitalSource Pilot Pro",
   "version": "10.0.0",
-  "description": "Autonomous book scraping engine for VitalSource. Full-book and chapter-selective ripping with AI-powered PDF assembly.",
-  "permissions": ["sidePanel", "tabs", "activeTab", "scripting", "storage", "unlimitedStorage", "management", "debugger", "downloads", "webNavigation"],
+  "description": "Autonomous book scraping engine for VitalSource.",
+  "permissions": [
+    "sidePanel",
+    "tabs",
+    "activeTab",
+    "scripting",
+    "storage",
+    "unlimitedStorage",
+    "downloads",
+    "webNavigation"
+  ],
   "host_permissions": [
     "*://bookshelf.vitalsource.com/*",
     "*://capella.vitalsource.com/*",
@@ -12,16 +21,11 @@
     "*://*.capella.edu/*"
   ],
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "type": "module"
   },
   "action": {
-    "default_title": "Open Pilot Pro",
-    "default_icon": "icon.svg"
-  },
-  "icons": {
-    "16": "icon.svg",
-    "48": "icon.svg",
-    "128": "icon.svg"
+    "default_title": "Open Pilot Pro"
   },
   "side_panel": {
     "default_path": "sidebar.html"
@@ -35,41 +39,8 @@
         "*://jigsaw.vitalsource.com/*",
         "*://*.capella.edu/*"
       ],
-      "js": ["intercept.js"],
-      "world": "MAIN",
+      "js": ["content.js"],
       "all_frames": true,
-      "run_at": "document_start"
-    },
-    {
-      "matches": [
-        "*://bookshelf.vitalsource.com/*",
-        "*://capella.vitalsource.com/*",
-        "*://mosaic.vitalsource.com/*",
-        "*://jigsaw.vitalsource.com/*",
-        "*://*.capella.edu/*"
-      ],
-      "js": [
-        "src/features/dom/scanner.feature.js",
-        "src/features/capture/cleaner.feature.js",
-        "src/features/capture/stabilizer.feature.js",
-        "src/features/navigation/driver.feature.js",
-        "src/features/engine/autopilot.feature.js",
-        "content.js"
-      ],
-      "all_frames": true,
-      "run_at": "document_idle"
-    },
-    {
-      "matches": [
-        "*://bookshelf.vitalsource.com/*",
-        "*://capella.vitalsource.com/*",
-        "*://mosaic.vitalsource.com/*",
-        "*://jigsaw.vitalsource.com/*",
-        "*://*.capella.edu/*"
-      ],
-      "js": ["src/features/mobile/floating-menu.js"],
-      "css": ["src/features/mobile/menu.styles.css"],
-      "all_frames": false,
       "run_at": "document_idle"
     }
   ]
