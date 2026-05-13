@@ -3,23 +3,21 @@
  * Manages Table of Contents and ripping sequence metadata.
  */
 
-class QueueService {
-    constructor() {
-        this.RipQueue = [];
-        this.CurrentIndex = 0;
-        this.outline = [];
-        this.pagebreaks = [];
-    }
+const PilotQueue = {
+    RipQueue: [],
+    CurrentIndex: 0,
+    outline: [],
+    pagebreaks: [],
 
     setOutline(data) {
         this.outline = Array.isArray(data) ? data : [];
         window.dispatchEvent(new CustomEvent('pilot-outline-updated', { detail: this.outline }));
-    }
+    },
 
     setPagebreaks(data) {
         this.pagebreaks = Array.isArray(data) ? data : [];
         console.log(`[PilotPro] ${this.pagebreaks.length} Pagebreaks Synchronized`);
-    }
+    },
 
     async fetchManifest(bookId) {
         if (!bookId) return null;
@@ -38,7 +36,7 @@ class QueueService {
             } catch (e) {}
         }
         return null;
-    }
+    },
 
     processNext() {
         if (this.CurrentIndex >= this.RipQueue.length) {
@@ -48,12 +46,11 @@ class QueueService {
         chrome.tabs.sendMessage(window.targetTabId, {
             type: 'CMD', action: 'JUMP', cfi: item.cfi, url: item.url, page: item.page
         });
-    }
+    },
 
     onComplete() {
         window.dispatchEvent(new Event('pilot-queue-finished'));
     }
-}
+};
 
-const pilotQueue = new QueueService();
-window.PilotQueue = pilotQueue;
+window.PilotQueue = PilotQueue;

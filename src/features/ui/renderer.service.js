@@ -55,28 +55,25 @@ const PilotRenderer = {
 
 window.PilotRenderer = PilotRenderer;
 
-class SnapPreview {
-    constructor() {
-        this.snapCount = 0;
-        this.init();
-    }
+const PilotSnapPreview = {
+    snapCount: 0,
 
     init() {
         window.addEventListener('snap-updated', () => this.updatePreview());
-    }
+    },
 
     updatePreview() {
         const previewElement = document.getElementById('snap-preview');
         if (previewElement) {
             previewElement.textContent = `Snaps: ${this.snapCount}`;
         }
-    }
+    },
 
     addSnap() {
         this.snapCount++;
         this.updatePreview();
     }
-}
+};
 
-// Initializer
-const snapPreview = new SnapPreview();
+// Initialize
+PilotSnapPreview.init();

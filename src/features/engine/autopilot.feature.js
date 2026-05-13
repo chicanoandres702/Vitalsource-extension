@@ -11,19 +11,19 @@ const PilotAutopilot = {
     snapWithRetry(attempt = 0, force = false) {
         if (this.isSnapping && !force) return;
 
-        if (PilotStabilizer.isSpinnerActive()) {
-            if (PilotStabilizer._spinnerAttempts++ < 15) {
+        if (window.PilotStabilizer.isSpinnerActive()) {
+            if (window.PilotStabilizer._spinnerAttempts++ < 15) {
                 setTimeout(() => this.snapWithRetry(attempt, force), 400); return;
             }
         }
-        PilotStabilizer._spinnerAttempts = 0;
+        window.PilotStabilizer._spinnerAttempts = 0;
 
         let target = window.customSelector ? 
-            PilotScanner.findDeep(window.customSelector) : 
-            PilotScanner.autoDetectContent();
+            window.PilotScanner.findDeep(window.customSelector) : 
+            window.PilotScanner.autoDetectContent();
 
         if (target && !force) {
-            const stable = PilotStabilizer.verifyStability(
+            const stable = window.PilotStabilizer.verifyStability(
                 target, attempt, () => {}, 
                 (d) => setTimeout(() => this.snapWithRetry(attempt, force), d)
             );
@@ -39,16 +39,16 @@ const PilotAutopilot = {
 
     executeSnap(target, force) {
         this.isSnapping = true;
-        PilotScanner.highlight(target); // Capture Pulse
+        window.PilotScanner.highlight(target); // Capture Pulse
         
         try {
-            const html = PilotCleaner.cleanAndResolveHTML(target);
+            const html = window.PilotCleaner.cleanAndResolveHTML(target);
             const pageId = window.PilotOrchestrator.getCurrentPageId();
-            const styles = this.capturedCount === 0 ? PilotCleaner.getAbsoluteStyles() : '';
+            const styles = this.capturedCount === 0 ? window.PilotCleaner.getAbsoluteStyles() : '';
             
             const meta = {
                 pageId,
-                fingerprint: PilotCleaner.quickHash(pageId + '|' + html),
+                fingerprint: window.PilotCleaner.quickHash(pageId + '|' + html),
                 url: location.href,
                 timestamp: Date.now()
             };
@@ -57,7 +57,7 @@ const PilotAutopilot = {
             this.capturedCount++;
             
             // Brief persistence then clear
-            setTimeout(() => PilotScanner.clearHighlight(), 300);
+            setTimeout(() => window.PilotScanner.clearHighlight(), 300);
         } finally {
             this.isSnapping = false;
         }

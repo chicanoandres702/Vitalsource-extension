@@ -11,7 +11,8 @@
     "storage",
     "unlimitedStorage",
     "downloads",
-    "webNavigation"
+    "webNavigation",
+    "debugger"
   ],
   "host_permissions": [
     "*://bookshelf.vitalsource.com/*",
@@ -39,7 +40,17 @@
         "*://jigsaw.vitalsource.com/*",
         "*://*.capella.edu/*"
       ],
-      "js": ["content.js"],
+      "js": [
+        "src/features/ripping/storage.service.js",
+        "src/features/ripping/watchdog.service.js",
+        "src/features/capture/cleaner.feature.js",
+        "src/features/capture/stabilizer.feature.js",
+        "src/features/dom/scanner.feature.js",
+        "src/features/navigation/driver.feature.js",
+        "src/features/engine/autopilot.feature.js",
+        "orchestrator.js",
+        "content.js"
+      ],
       "all_frames": true,
       "run_at": "document_idle"
     }

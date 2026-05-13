@@ -38,9 +38,9 @@ const PilotSelection = {
     },
 
     autoPick() {
-        const content = PilotScanner.autoDetectContent();
+        const content = window.PilotScanner.autoDetectContent();
         if (!content) return null;
-        const selector = PilotScanner.generateOptimalSelector(content);
+        const selector = window.PilotScanner.generateOptimalSelector(content);
         if (selector) {
             this.saveSelector(selector);
         }

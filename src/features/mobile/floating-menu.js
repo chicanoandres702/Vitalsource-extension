@@ -3,11 +3,8 @@
  * Replaces the sidebar on Android devices.
  */
 
-class FloatingMenu {
-    constructor() {
-        this.isOpen = false;
-        this.init();
-    }
+const PilotFloatingMenu = {
+    isOpen: false,
 
     init() {
         // Create FAB
@@ -51,29 +48,29 @@ class FloatingMenu {
         };
 
         document.getElementById('vst-close-drawer').onclick = () => this.close();
-    }
+    },
 
     updateStatus(text) {
         const el = document.getElementById('vst-mobile-status');
         if (el) el.textContent = text;
-    }
+    },
 
     toggle() {
         this.isOpen ? this.close() : this.open();
-    }
+    },
 
     open() {
         this.isOpen = true;
         document.getElementById('vst-mobile-drawer').classList.add('open');
-    }
+    },
 
     close() {
         this.isOpen = false;
         document.getElementById('vst-mobile-drawer').classList.remove('open');
     }
-}
+};
 
 // Initializer
 if (navigator.userAgent.toLowerCase().includes('android')) {
-    new FloatingMenu();
+    PilotFloatingMenu.init();
 }

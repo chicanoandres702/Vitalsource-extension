@@ -2,10 +2,8 @@
  * filepath: src/features/ripping/storage.service.js
  * PilotStorage - Shared persistence layer.
  */
-export class StorageService {
-    constructor() {
-        this._storageKey = 'pilot_pro_captured_pages';
-    }
+const PilotStorage = {
+    _storageKey: 'pilot_pro_captured_pages',
 
     async savePage(pageData) {
         const result = await chrome.storage.local.get([this._storageKey]);
@@ -19,21 +17,21 @@ export class StorageService {
             return pages.length;
         }
         return pages.length;
-    }
+    },
 
     async getAllPages() {
         const result = await chrome.storage.local.get([this._storageKey]);
         return result[this._storageKey] || [];
-    }
+    },
 
     async clear() {
         await chrome.storage.local.remove([this._storageKey]);
-    }
+    },
 
     async getCount() {
         const pages = await this.getAllPages();
         return pages.length;
     }
-}
+};
 
-export const PilotStorage = new StorageService();
+window.PilotStorage = PilotStorage;

@@ -3,15 +3,13 @@
  * Handles page flipping via keyboard and DOM triggers.
  */
 
-import { log } from '../../lib/logger.js';
-
-export const NEXT_SELECTORS = [
+const NEXT_SELECTORS = [
     'button[aria-label="Next Page"]',
     'button.next-button',
     '.vst-icon-chevron-right'
 ];
 
-export function triggerNext(flipDelay = 1200) {
+function triggerNext(flipDelay = 1200) {
     const nextBtn = document.querySelector(NEXT_SELECTORS.join(','));
     
     const keyOptions = { 
@@ -33,3 +31,6 @@ export function triggerNext(flipDelay = 1200) {
         nextBtn.click();
     }
 }
+
+// Make it globally available
+window.triggerNext = triggerNext;

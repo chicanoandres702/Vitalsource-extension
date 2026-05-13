@@ -1,18 +1,17 @@
 /**
  * filepath: background.js
  * PilotPro Master Orchestrator
- * Handles: SidePanel lifecycle, Native PDF Printing, and Global Messaging
+ * Fixes: Asynchronous message channel closure errors.
  */
 
-// 1. Configure SidePanel to open on extension icon click
+// Configure side panel behavior
 chrome.sidePanel
   .setPanelBehavior({ openPanelOnActionClick: true })
-  .catch((error) => console.error('[PilotPro] SidePanel Init Error:', error));
+  .catch((error) => console.error('[PilotPro] SidePanel config error:', error));
 
-// 2. Streamlined SidePanel restriction to VitalSource/Capella domains
+// Domain restriction for SidePanel
 chrome.tabs.onUpdated.addListener(async (tabId, info, tab) => {
   if (!tab.url || info.status !== 'loading') return;
-  
   try {
     const url = new URL(tab.url);
     const isSupported = [
@@ -22,71 +21,82 @@ chrome.tabs.onUpdated.addListener(async (tabId, info, tab) => {
       'jigsaw.vitalsource.com'
     ].includes(url.hostname) || url.hostname.endsWith('.capella.edu');
 
-    await chrome.sidePanel.setOptions({
-      tabId,
-      path: 'sidebar.html',
-      enabled: isSupported
-    });
-  } catch (e) {
-    // Silent fail for non-standard URLs
-  }
+    await chrome.sidePanel.setOptions({ tabId, path: 'sidebar.html', enabled: isSupported });
+  } catch (e) {}
 });
 
-// 3. Native PDF Creation & Message Handling
+/**
+ * Global Message Listener
+ * MANDATORY: Every path MUST call sendResponse()
+ */
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  
   if (request.action === 'CREATE_NATIVE_PDF') {
-    const targetTabId = sender.tab ? sender.tab.id : null;
+    const targetTabId = request.targetTabId || (sender.tab ? sender.tab.id : null);
     
     if (!targetTabId) {
-      sendResponse({ success: false, error: 'No source tab found for PDF generation' });
+      sendResponse({ success: false, error: 'Target Tab ID is missing' });
       return false;
     }
 
-    // Use Chrome DevTools Protocol to print the page as a high-quality PDF
-    chrome.debugger.attach({ tabId: targetTabId }, '1.3', () => {
-      if (chrome.runtime.lastError) {
-        sendResponse({ success: false, error: chrome.runtime.lastError.message });
-        return;
-      }
+    // Process logic asynchronously
+    (async () => {
+      try {
+        if (!chrome.debugger) {
+          throw new Error('Debugger API permission missing from manifest.');
+        }
 
-      const printOptions = {
-        landscape: false,
-        displayHeaderFooter: false,
-        printBackground: true,
-        marginTop: 0.2,
-        marginBottom: 0.2,
-        marginLeft: 0.2,
-        marginRight: 0.2,
-        paperWidth: 8.5,
-        paperHeight: 11,
-        preferCSSPageSize: true,
-        generateDocumentOutline: true
-      };
-
-      chrome.debugger.sendCommand({ tabId: targetTabId }, 'Page.printToPDF', printOptions, (result) => {
-        // Always detach immediately after command
-        chrome.debugger.detach({ tabId: targetTabId });
+        // Attach debugger
+        await chrome.debugger.attach({ tabId: targetTabId }, '1.3');
         
-        if (chrome.runtime.lastError) {
-          sendResponse({ success: false, error: chrome.runtime.lastError.message });
-        } else if (result && result.data) {
+        const printParams = {
+          printBackground: true,
+          preferCSSPageSize: true,
+          generateDocumentOutline: true,
+          paperWidth: 8.5,
+          paperHeight: 11,
+          marginTop: 0,
+          marginBottom: 0,
+          marginLeft: 0,
+          marginRight: 0
+        };
+
+        // Send Command and wait for result with timeout
+        const result = await Promise.race([
+          new Promise((resolve, reject) => {
+            chrome.debugger.sendCommand({ tabId: targetTabId }, 'Page.printToPDF', printParams, (result) => {
+              const lastErr = chrome.runtime.lastError;
+              if (lastErr) {
+                reject(lastErr);
+              } else {
+                resolve(result);
+              }
+            });
+          }),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('PDF generation timeout')), 30000)
+          )
+        ]);
+
+        // Always detach after command attempt
+        await chrome.debugger.detach({ tabId: targetTabId }).catch(() => {});
+
+        if (result && result.data) {
           sendResponse({ success: true, pdfData: result.data });
         } else {
-          sendResponse({ success: false, error: 'Failed to generate PDF data' });
+          sendResponse({ success: false, error: 'PDF engine returned null data' });
         }
-      });
-    });
-    return true; // Keep channel open for async response
+      } catch (err) {
+        console.error('[PilotPro] Background Error:', err);
+        // Always detach on error
+        chrome.debugger.detach({ tabId: targetTabId }).catch(() => {});
+        sendResponse({ success: false, error: err.message });
+      }
+    })();
+
+    return true; // Keep message channel open for async response
   }
 
-  // Handle generic stats relay from content to sidebar
-  if (request.type === 'PILOT_PAGE_CAPTURED') {
-    // This allows the sidebar to refresh without the background script needing to manage storage
-    console.log('[PilotPro] Broadcast: Capture Event');
-  }
-
+  // Fallback for unhandled messages to prevent channel hang
+  // Do not return true here
   return false;
 });
-
-console.log('[PilotPro] Engine v10.0 Online');

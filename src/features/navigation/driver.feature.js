@@ -6,10 +6,10 @@
 const PilotDriver = {
     triggerNext() {
         // [MOD] Ensure we are significant frame before allowing navigation control
-        if (window.top !== window.self && !PilotScanner.autoDetectContent()) return;
+        if (window.top !== window.self && !window.PilotScanner.autoDetectContent()) return;
         
         console.log('[PilotPro] Advancing logic engaged.');
-        const nextBtn = PilotScanner.findDeep('.next-button, .vst-next, [aria-label*="Next"], button[id*="next"]');
+        const nextBtn = window.PilotScanner.findDeep('.next-button, .vst-next, [aria-label*="Next"], button[id*="next"]');
         if (nextBtn) {
             nextBtn.click();
             return true;
@@ -24,7 +24,7 @@ const PilotDriver = {
     navigateToPage(cfi, url, pageLabel) {
         console.log(`[PilotPro] Jumping to ${pageLabel} (${cfi})`);
         
-        const input = PilotScanner.findDeep('input[class*="InputControl__input"], input[id^="text-field-"]');
+        const input = window.PilotScanner.findDeep('input[class*="InputControl__input"], input[id^="text-field-"]');
         if (input && pageLabel && !isNaN(pageLabel)) {
             this.setInputValue(input, pageLabel);
             return;

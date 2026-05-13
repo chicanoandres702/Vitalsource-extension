@@ -3,11 +3,15 @@
  * Logic for identifying the current operating environment.
  */
 
-export const isAndroid = () => {
+const isAndroid = () => {
     const ua = navigator.userAgent.toLowerCase();
     return ua.includes('android');
 };
 
-export const isMobile = () => {
+const isMobile = () => {
     return isAndroid() || /iphone|ipad|ipod/.test(navigator.userAgent.toLowerCase());
 };
+
+// Make functions globally available
+window.isAndroid = isAndroid;
+window.isMobile = isMobile;

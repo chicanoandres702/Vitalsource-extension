@@ -18,7 +18,7 @@ const PilotStabilizer = {
     },
 
     isSpinnerActive() {
-        const spinner = PilotScanner.findDeep('.loading-spinner, .vst-spinner, [class*="spinner"], .progress-circle');
+        const spinner = window.PilotScanner.findDeep('.loading-spinner, .vst-spinner, [class*="spinner"], .progress-circle');
         if (spinner) {
             const rect = spinner.getBoundingClientRect();
             return rect.width > 0 && rect.height > 0;
@@ -27,7 +27,7 @@ const PilotStabilizer = {
     },
 
     verifyStability(target, attempt, onStable, onWait) {
-        const currentFP = PilotCleaner.quickHash(target.outerHTML);
+        const currentFP = window.PilotCleaner.quickHash(target.outerHTML);
         
         if (currentFP !== this._lastFP) {
             this._lastFP = currentFP;
