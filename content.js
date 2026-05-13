@@ -43,23 +43,58 @@ const PilotOrchestrator = {
 
     handleCommand(msg) {
         const { action, ...p } = msg;
-        if (action === 'SNAP') PilotAutopilot.snapWithRetry(0, true);
-        if (action === 'PICK') this.activatePicker();
+        
+        // Log for debugging
+        console.log(`[PilotPro] Cmd Received: ${action}`, { sensorId: SENSOR_ID, hasCustomSelector: !!window.customSelector });
+        
+        if (action === 'PING') {
+            // Respond to ping to confirm frame is alive
+            console.log('[PilotPro] PING received - frame responsive');
+            this.safeSend({ type: 'PING_ACK', sensorId: SENSOR_ID, url: location.href });
+            return;
+        }
+        
+        if (action === 'SNAP') {
+            console.log('[PilotPro] SNAP action triggered');
+            PilotAutopilot.snapWithRetry(0, true);
+            return;
+        }
+        
+        if (action === 'NEXT_PAGE' || action === 'PAGE_ACK') {
+            console.log('[PilotPro] Navigation action:', action);
+            PilotDriver.triggerNext();
+            if (window.isScraping) setTimeout(() => PilotAutopilot.snapWithRetry(), 1500);
+            return;
+        }
+        
+        if (action === 'PICK') {
+            console.log('[PilotPro] PICK mode activated');
+            this.activatePicker();
+            return;
+        }
+        
         if (action === 'AUTOPICK') {
+            console.log('[PilotPro] AUTOPICK toggled:', p.enabled);
             if (p.enabled) {
                 const content = PilotScanner.autoDetectContent();
                 if (content) window.customSelector = PilotScanner.generateOptimalSelector(content);
             } else {
                 window.customSelector = null;
             }
+            return;
         }
-        if (action === 'PAGE_ACK') {
-            PilotDriver.triggerNext();
-            if (window.isScraping) setTimeout(() => PilotAutopilot.snapWithRetry(), 1500);
-        }
+        
         if (action === 'ENGINE_CONFIG') {
+            console.log('[PilotPro] Engine config:', p.state);
             window.isScraping = p.state;
             if (window.isScraping) PilotAutopilot.snapWithRetry();
+            return;
+        }
+        
+        if (action === 'CANCEL_PICK') {
+            console.log('[PilotPro] PICK mode cancelled');
+            // Just clear the picking state
+            return;
         }
     },
 
@@ -121,6 +156,12 @@ const PilotOrchestrator = {
     stopPulse() { if (this._pulseTimer) { clearInterval(this._pulseTimer); this._pulseTimer = null; } },
     startPulse() {
         this.stopPulse();
+        // Send ALIVE immediately on startup
+        console.log('[PilotPro] Sending initial ALIVE pulse');
+        this.safeSend({ 
+            type: 'ALIVE', sensorId: SENSOR_ID, contextId: CONTEXT_ID, url: location.href
+        });
+        // Then send every 5 seconds
         this._pulseTimer = setInterval(() => this.safeSend({ 
             type: 'ALIVE', sensorId: SENSOR_ID, contextId: CONTEXT_ID, url: location.href
         }), 5000);

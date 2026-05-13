@@ -3,7 +3,7 @@
   "name": "VitalSource Pilot Pro",
   "version": "10.0.0",
   "description": "Autonomous book scraping engine for VitalSource. Full-book and chapter-selective ripping with AI-powered PDF assembly.",
-  "permissions": ["sidePanel", "tabs", "activeTab", "scripting", "storage", "unlimitedStorage", "management", "debugger", "downloads"],
+  "permissions": ["sidePanel", "tabs", "activeTab", "scripting", "storage", "unlimitedStorage", "management", "debugger", "downloads", "webNavigation"],
   "host_permissions": [
     "*://bookshelf.vitalsource.com/*",
     "*://capella.vitalsource.com/*",

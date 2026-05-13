@@ -7,11 +7,11 @@
 
 const Config = {
     DEFAULTS: {
-        engineActive: true,
+        engineActive: false,  // Start disabled - user must click START
         autopickActive: true,
         targetSelector: 'body', 
         snapDelay: 1800,        // Slightly increased for high-res rendering
-        watchdogInterval: 18000, // 18s to allow for network lag/CSP blocks
+        watchdogInterval: 8000, // Reduced from 18s for faster stagnation detection
         kickstartDelay: 2500
     },
     DOM_SELECTORS: {
@@ -55,27 +55,47 @@ const MessagingService = {
     broadcast(cmd, targetFrame = null) {
         const payload = { type: 'CMD', ...cmd };
         
-        const transmit = (tabId) => {
-            if (targetFrame !== null) {
-                chrome.tabs.sendMessage(tabId, payload, { frameId: targetFrame }, (r) => {
-                    if (chrome.runtime.lastError) {
-                        chrome.tabs.sendMessage(tabId, payload, () => {});
+        const sendToTabAndFrames = (tabId) => {
+            // Helper to suppress lastError warnings
+            const sendSafe = (message, options = {}) => {
+                chrome.tabs.sendMessage(tabId, message, options, () => {
+                    // Clear any errors silently
+                    void chrome.runtime.lastError;
+                });
+            };
+            
+            // If specific frame is targeted, send only to that frame
+            if (targetFrame !== null && targetFrame !== undefined) {
+                console.log(`[PilotPro] Broadcasting to frame ${targetFrame}:`, cmd.action);
+                sendSafe(payload, { frameId: targetFrame });
+            } else {
+                // Broadcast to all known sensor frames
+                console.log(`[PilotPro] Broadcasting to all frames:`, cmd.action, `(${PilotState.activeSensors.size} sensors active)`);
+                
+                // Send to all active sensor frames only (don't send to frameId 0 blindly)
+                let sentCount = 0;
+                PilotState.activeSensors.forEach((frameInfo, sensorId) => {
+                    if (frameInfo && typeof frameInfo === 'object' && frameInfo.frameId !== undefined) {
+                        sendSafe(payload, { frameId: frameInfo.frameId });
+                        sentCount++;
                     }
                 });
-            } else {
-                chrome.tabs.sendMessage(tabId, payload, () => {
-                    if (chrome.runtime.lastError) return;
-                });
+                
+                // If no active sensors, broadcast to main frame as fallback
+                if (sentCount === 0) {
+                    console.log('[PilotPro] No active sensors, broadcasting to main frame');
+                    sendSafe(payload);
+                }
             }
         };
 
         if (PilotState.targetTabId) {
-            transmit(PilotState.targetTabId);
+            sendToTabAndFrames(PilotState.targetTabId);
         } else {
             chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
                 if (tabs[0]) {
                     PilotState.targetTabId = tabs[0].id;
-                    transmit(tabs[0].id);
+                    sendToTabAndFrames(tabs[0].id);
                 }
             });
         }
@@ -178,12 +198,43 @@ const WatchdogService = {
 
 const CaptureService = {
     triggerSnap() {
-        if (!PilotState.engineActive || PilotState.isPicking || PilotState.isProcessing) return;
-        MessagingService.broadcast({ 
+        console.log('[PilotPro] triggerSnap() called. Engine:', PilotState.engineActive, 'Picking:', PilotState.isPicking, 'Processing:', PilotState.isProcessing);
+        
+        if (!PilotState.engineActive || PilotState.isPicking || PilotState.isProcessing) {
+            console.log('[PilotPro] triggerSnap() - guard condition failed');
+            return;
+        }
+        
+        const payload = { 
             action: 'SNAP', 
             selector: PilotState.targetSelector, 
             autoSelect: true 
-        }, PilotState.targetFrameId);
+        };
+        
+        console.log('[PilotPro] Sending SNAP. targetFrameId:', PilotState.targetFrameId, 'Active sensors:', PilotState.activeSensors.size);
+        
+        // Priority 1: Send to targetFrameId (primary content frame)
+        if (PilotState.targetFrameId !== null && PilotState.targetFrameId !== undefined) {
+            console.log('[PilotPro] SNAP -> target frame', PilotState.targetFrameId);
+            MessagingService.broadcast(payload, PilotState.targetFrameId);
+            return;
+        } 
+        
+        // Priority 2: If we have active sensors, send to all of them
+        if (PilotState.activeSensors.size > 0) {
+            console.log(`[PilotPro] SNAP -> broadcasting to ${PilotState.activeSensors.size} active sensor(s)`);
+            PilotState.activeSensors.forEach((frameInfo, sensorId) => {
+                if (frameInfo && typeof frameInfo === 'object' && frameInfo.frameId !== undefined) {
+                    console.log(`[PilotPro]   -> Sending to sensor ${sensorId} (frame ${frameInfo.frameId})`);
+                    MessagingService.broadcast(payload, frameInfo.frameId);
+                }
+            });
+            return;
+        } 
+        
+        // Priority 3: Broadcast to all frames (for discovery)
+        console.log('[PilotPro] SNAP -> broadcast to all frames (discovery)');
+        MessagingService.broadcast(payload, null);
     },
 
     processData(msg) {
@@ -230,8 +281,12 @@ const CaptureService = {
 
 const NavigationService = {
     advance() {
-        if (PilotState.isPicking || PilotState.isProcessing) return;
+        if (PilotState.isPicking || PilotState.isProcessing) {
+            console.log('[PilotPro] NAV: Skipped (isPicking:', PilotState.isPicking, ', isProcessing:', PilotState.isProcessing, ')');
+            return;
+        }
         
+        console.log('[PilotPro] NAV: Advancing to next page');
         // Broadcast NEXT to all frames to ensure it hits the jigsaw navigation controls
         MessagingService.broadcast({ action: 'NEXT_PAGE' }, null); 
         MessagingService.broadcast({ action: 'PAGE_ACK' }, null);
@@ -253,16 +308,38 @@ const PilotController = {
     },
 
     kickstart() {
-        setTimeout(() => {
-            if (PilotState.targetFrameId === null && PilotState.engineActive && !PilotState.isPicking) {
-                console.log('[PilotPro] Controller: Kickstarting loop...');
-                CaptureService.triggerSnap();
+        // Wait for frames to discover themselves before trying to capture
+        let attempts = 0;
+        const maxAttempts = 5;
+        
+        const tryKickstart = () => {
+            attempts++;
+            
+            // Check if we have discovered any frames
+            if (PilotState.activeSensors.size > 0 && PilotState.targetFrameId !== null) {
+                console.log('[PilotPro] Controller: Frames discovered. Kickstarting loop...');
+                if (PilotState.engineActive) {
+                    CaptureService.triggerSnap();
+                }
+            } else if (attempts < maxAttempts) {
+                console.log(`[PilotPro] Waiting for frames... (attempt ${attempts}/${maxAttempts})`);
+                setTimeout(tryKickstart, 500);
+            } else {
+                console.log('[PilotPro] Kickstart timeout - frames may not be ready yet');
             }
-        }, Config.DEFAULTS.kickstartDelay);
+        };
+        
+        setTimeout(tryKickstart, 1000);
     },
 
     syncUI() {
         if (window.PilotRenderer) PilotRenderer.setEngineActive(PilotState.engineActive);
+        
+        // UPDATE STATUS DISPLAY
+        const statusDisplay = document.getElementById('status-display');
+        if (statusDisplay) {
+            statusDisplay.textContent = PilotState.engineActive ? 'AUTONOMOUS' : 'STANDBY';
+        }
         
         const btnAuto = document.getElementById(Config.DOM_SELECTORS.BTN_AUTOPICK);
         if (btnAuto) {
@@ -279,7 +356,7 @@ const PilotController = {
         
         const btnRun = document.getElementById(Config.DOM_SELECTORS.BTN_RUN);
         if (btnRun) {
-            btnRun.textContent = PilotState.engineActive ? 'STOP PILOT' : 'START PILOT';
+            btnRun.textContent = PilotState.engineActive ? 'STOP PILOT' : 'START AUTO-RIP';
             btnRun.style.backgroundColor = PilotState.engineActive ? 'rgba(255, 0, 0, 0.2)' : '';
         }
     },
@@ -296,8 +373,16 @@ const PilotController = {
             PilotState.isProcessing = false;
             this.syncUI();
             if (PilotState.engineActive) {
-                WatchdogService.reset();
-                CaptureService.triggerSnap();
+                console.log('[PilotPro] Engine starting - sending PING to all frames');
+                // Broadcast PING to wake frames and get their frameIds
+                MessagingService.broadcast({ action: 'PING', forceInit: true }, null);
+                
+                // Give frames time to respond with ALIVE messages
+                setTimeout(() => {
+                    console.log(`[PilotPro] Starting capture loop. Active sensors: ${PilotState.activeSensors.size}`);
+                    WatchdogService.reset();
+                    CaptureService.triggerSnap();
+                }, 1000);
             } else {
                 WatchdogService.stop();
             }
@@ -358,13 +443,30 @@ const PilotController = {
                     }
                 },
                 'DATA': () => CaptureService.processData(msg),
+                'PING_ACK': () => {
+                    console.log('[PilotPro] PING_ACK received from sensor:', msg.sensorId);
+                    PilotState.activeSensors.set(msg.sensorId, {
+                        frameId: sender.frameId,
+                        lastActivity: Date.now(),
+                        url: msg.url
+                    });
+                    PilotState.targetTabId = sender.tab?.id || PilotState.targetTabId;
+                },
                 'ALIVE': () => {
                     PilotState.isRecovering = false;
                     if (!PilotState.isPicking && !PilotState.isProcessing) WatchdogService.reset();
                     
-                    PilotState.activeSensors.set(msg.sensorId, Date.now());
+                    // Store sensor info with frameId for targeting
+                    PilotState.activeSensors.set(msg.sensorId, {
+                        frameId: sender.frameId,
+                        lastActivity: Date.now(),
+                        url: msg.url || sender.url
+                    });
+                    
                     const frameUrl = sender.url || msg.url || '';
                     const currentCfi = MessagingService.extractCfi({ url: frameUrl });
+                    
+                    console.log(`[PilotPro] ALIVE from sensor ${msg.sensorId} (frame ${sender.frameId})`);
                     
                     if (window.PilotRenderer) {
                         PilotRenderer.updateFrameCount(PilotState.activeSensors.size);
