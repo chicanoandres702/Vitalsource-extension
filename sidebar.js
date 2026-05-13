@@ -32,7 +32,13 @@ const Sidebar = {
   },
 
   async refreshUI() {
-    const count = await window.PilotStorage.getCount();
+    console.log("Object before calling getCount:", window.PilotStorage); // Replace 'yourObject' with the actual variable name
+    let count = 0;
+    if (window.PilotStorage && typeof window.PilotStorage.getCount === 'function') {
+      count = await window.PilotStorage.getCount();
+    } else {
+      console.warn('window.PilotStorage or getCount is not available');
+    }
     if (this.progressText) this.progressText.textContent = `${count} Pages Saved`;
   },
 
@@ -41,7 +47,21 @@ const Sidebar = {
       if (tabs[0]) chrome.tabs.sendMessage(tabs[0].id, { type: 'PICK' });
     });
   },
-
+  // Example: send a message to background and handle async response
+  async sendAsyncOperation(data) {
+    return new Promise((resolve, reject) => {
+      chrome.runtime.sendMessage({ type: 'ASYNC_OPERATION', data }, (response) => {
+        const msgErr = chrome.runtime.lastError;
+        if (msgErr) {
+          reject(msgErr);
+        } else if (response?.success) {
+          resolve(response.data);
+        } else {
+          reject(new Error(response?.error || 'Unknown error'));
+        }
+      });
+    });
+  },
   triggerSnap() {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (tabs[0]) chrome.tabs.sendMessage(tabs[0].id, { type: 'SNAP' });

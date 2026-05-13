@@ -18,6 +18,9 @@ const PilotWatchdog = {
         if (this._timer) clearInterval(this._timer);
         this._timer = null;
     },
+    isArmed() {
+        return this._timer !== null;
+    },
 
     reset() {
         this._lastActivity = Date.now();
