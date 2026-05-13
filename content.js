@@ -1,83 +1,57 @@
 /**
- * filepath: content.js
+ * VitalSource Pilot Pro - Content Script
+ * Initializes and orchestrates all features
  */
 
-// Local storage helper (no imports to avoid SyntaxError)
-const PilotStorageLocal = {
-    _storageKey: 'pilot_pro_captured_pages',
-    async savePage(pageData) {
-        const result = await chrome.storage.local.get([this._storageKey]);
-        const pages = result[this._storageKey] || [];
-        pages.push({ ...pageData, timestamp: Date.now() });
-        await chrome.storage.local.set({ [this._storageKey]: pages });
-        return pages.length;
+(async function init() {
+  // Check if we are in an orphaned context
+  if (typeof chrome === 'undefined' || !chrome.runtime?.id) {
+    console.warn('[Pilot] Script injected into orphaned context. Skipping init.');
+    return;
+  }
+
+  console.log('[Pilot] Core initializing...');
+
+  const features = [
+    'src/features/platform/detection.service.js',
+    'src/features/ripping/storage.service.js',
+    'src/features/navigation/turner.service.js',
+    'src/features/ripping/watchdog.service.js',
+    'src/features/ui/renderer.service.js',
+    'orchestrator.js'
+  ];
+
+  for (const script of features) {
+    try {
+      await injectScript(script);
+      // Brief delay to ensure JS engine processes the script before next injection
+      await new Promise(r => setTimeout(r, 10)); 
+    } catch (e) {
+      console.error(`[Pilot] Failed to load ${script}. Check manifest.json web_accessible_resources.`);
     }
-};
+  }
+})();
 
-/**
- * fixImagePaths - Converts relative URLs to absolute URLs
- * This ensures images show up in the PDF/HTML export.
- */
-function fixImagePaths(container) {
-    const images = container.querySelectorAll('img');
-    images.forEach(img => {
-        const src = img.getAttribute('src');
-        if (src && !src.startsWith('data:') && !src.startsWith('http')) {
-            // Convert relative to absolute based on current page URL
-            img.src = new URL(src, window.location.href).href;
-        }
-    });
-    return container.innerHTML;
-}
-
-async function performSnap(target, metadata) {
-    if (!target) return;
-
-    // Flash effect
-    const originalBorder = target.style.border;
-    target.style.border = '4px solid #00f2ff';
-    setTimeout(() => target.style.border = originalBorder, 500);
-
-    // Clean and fix content
-    const cleanHtml = fixImagePaths(target.cloneNode(true));
-
-    const payload = {
-        html: cleanHtml,
-        index: metadata?.pageIndex || Date.now(),
-        metadata: {
-            title: document.title,
-            url: window.location.href
-        }
+function injectScript(file) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    // Using try/catch for chrome.runtime.getURL to catch invalidation early
+    try {
+      s.src = chrome.runtime.getURL(file);
+    } catch (e) {
+      return reject(new Error('Extension context invalidated'));
+    }
+    
+    s.type = 'text/javascript';
+    s.async = false;
+    s.onload = () => {
+      s.remove();
+      resolve();
     };
-
-    await PilotStorageLocal.savePage(payload);
-    chrome.runtime.sendMessage({ type: 'PILOT_PAGE_CAPTURED' });
-    console.log(`[PilotPro] Snap sequence complete: Page ${payload.index}`);
+    s.onerror = (err) => {
+      s.remove();
+      reject(err);
+    };
+    (document.head || document.documentElement).appendChild(s);
+  });
 }
-
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.type === 'PICK') {
-        window.isPickMode = true;
-        console.log('[PilotPro] PICK mode active. Click container.');
-    } else if (request.type === 'SNAP') {
-        const sensor = document.querySelector('.pilot-pro-sensor');
-        if (sensor) {
-            performSnap(sensor, request.metadata);
-            sendResponse({ success: true });
-        } else {
-            sendResponse({ success: false, error: 'No sensor' });
-        }
-    }
-    return true;
-});
-
-document.addEventListener('click', (e) => {
-    if (!window.isPickMode) return;
-    e.preventDefault(); e.stopPropagation();
-    document.querySelectorAll('.pilot-pro-sensor').forEach(el => el.classList.remove('pilot-pro-sensor'));
-    e.target.classList.add('pilot-pro-sensor');
-    window.isPickMode = false;
-    chrome.runtime.sendMessage({ type: 'SENSOR_LOCKED', tag: e.target.tagName });
-}, true);
-
-console.log('[PilotPro] Content Agent Online - All features loaded by manifest');

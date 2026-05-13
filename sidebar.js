@@ -43,7 +43,8 @@ const Sidebar = {
   },
 
   triggerPick() {
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+ 
+   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (tabs[0]) chrome.tabs.sendMessage(tabs[0].id, { type: 'PICK' });
     });
   },
