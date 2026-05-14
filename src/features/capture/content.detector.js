@@ -35,6 +35,10 @@ class ContentDetector {
         this.sliderCache = null;
     }
 
+    findDeep(selector) {
+        return findDeep(selector);
+    }
+
     containsValidMedia(el) {
         if (!el) return false;
         const canvases = el.tagName === 'CANVAS' ? [el] : Array.from(el.querySelectorAll('canvas'));
@@ -153,12 +157,7 @@ class ContentDetector {
         const media = Array.from(el.querySelectorAll('img, canvas, iframe, video, svg'))
             .map(m => {
                 if (m.tagName === 'CANVAS') {
-                    try {
-                        const d = m.toDataURL();
-                        return `CANVAS_${m.width}x${m.height}_${d.substring(d.length/2, d.length/2 + 50)}`;
-                    } catch(e) {
-                        return `CANVAS_${m.width}x${m.height}`;
-                    }
+                    return `CANVAS_${m.width}x${m.height}`;
                 }
                 if (m.tagName === 'SVG') return `SVG_${m.innerHTML.length}`;
                 if (m.tagName === 'IMG') {

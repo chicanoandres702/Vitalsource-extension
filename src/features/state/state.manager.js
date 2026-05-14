@@ -1,7 +1,7 @@
 /**
  * Global state management for the extension
  */
-import { logger } from '../services/logger.service.js';
+import { logger } from '../../services/logger.service.js';
 
 class StateManager {
     constructor() {
@@ -22,6 +22,14 @@ class StateManager {
         this.lastTextHash = '';
         this._lastStabilizeFP = '';
         this._stabilizeReady = false;
+
+        try {
+            chrome.storage.local.get(['lastCustomSelector'], (res) => {
+                if (res.lastCustomSelector) {
+                    this.customSelector = res.lastCustomSelector;
+                }
+            });
+        } catch (e) {}
     }
 
     // Outline management
@@ -125,7 +133,11 @@ class StateManager {
     getAutoPilot() { return this.autoPilot; }
     setCustomSelector(selector) {
         this.customSelector = selector;
+        try {
+            chrome.storage.local.set({ lastCustomSelector: selector });
+        } catch (e) {}
     }
+    getCustomSelector() { return this.customSelector; }
     getAutoPilotStopPage() { return this.autoPilotStopPage; }
     getFlipDelay() { return this.flipDelay; }
     getLastFlipTime() { return this.lastFlipTime; }

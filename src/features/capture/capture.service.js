@@ -163,6 +163,9 @@ class CaptureService {
                     logger.log('DATA', `Duplicate filtered by Session History. Hash: ${textHash}`);
                     this.isSnapping = false;
                     stateManager.setHasSnappedCurrentPage(true); // Mark as done so we flip
+                    if (stateManager.getAutoPilot()) {
+                        setTimeout(() => navigationService.triggerNext(), stateManager.getFlipDelay());
+                    }
                     return;
                 }
             }
@@ -259,10 +262,16 @@ class CaptureService {
         }
         this.spinnerWaitAttempts = 0;
 
-        let target = stateManager.getCustomSelector() ? contentDetector.findDeep(stateManager.getCustomSelector()) : contentDetector.autoDetectContent(force);
-
-        if (stateManager.getCustomSelector() && !force && !contentDetector.isContentValid(target)) {
-            target = null;
+        let target = null;
+        if (stateManager.getCustomSelector()) {
+            target = contentDetector.findDeep(stateManager.getCustomSelector());
+            if (!force && !contentDetector.isContentValid(target)) {
+                target = null;
+            }
+        }
+        
+        if (!target) {
+            target = contentDetector.autoDetectContent(force);
         }
 
         // ENHANCED ASSET LOADING CHECK
@@ -358,7 +367,8 @@ class CaptureService {
     }
 
     scheduleSnap(delay = 800) {
-        setTimeout(() => this.snapWithRetry(), delay);
+        if (this._snapTimeout) clearTimeout(this._snapTimeout);
+        this._snapTimeout = setTimeout(() => this.snapWithRetry(), delay);
     }
 }
 

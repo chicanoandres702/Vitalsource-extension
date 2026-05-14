@@ -4,14 +4,14 @@
  */
 
 // Import all services
-import { logger } from './services/logger.service.js';
-import { messagingService } from './services/messaging.service.js';
-import { stateManager } from './features/state/state.manager.js';
-import { contentDetector } from './features/capture/content.detector.js';
-import { captureService } from './features/capture/capture.service.js';
-import { navigationService } from './features/navigation/turner.service.js';
-import { observerService } from './features/observers/observer.service.js';
-import { uiService } from './features/ui/ui.service.js';
+import { logger } from '../services/logger.service.js';
+import { messagingService } from '../services/messaging.service.js';
+import { stateManager } from '../features/state/state.manager.js';
+import { contentDetector } from '../features/capture/content.detector.js';
+import { captureService } from '../features/capture/capture.service.js';
+import { navigationService } from '../features/navigation/turner.service.js';
+import { observerService } from '../features/observers/observer.service.js';
+import { uiService } from '../features/ui/ui.service.js';
 
 // Initialize DEBUG mode
 const DEBUG = false;
@@ -60,6 +60,7 @@ function handleCommand(message, sendResponse) {
             sendResponse(metadata);
             break;
         case 'PAGE_ACK':
+            stateManager.setHasSnappedCurrentPage(false);
             if (stateManager.getAutoPilot() && stateManager.getIsScraping() && messagingService.isTop) {
                 setTimeout(() => navigationService.triggerNext(), stateManager.getFlipDelay());
             }

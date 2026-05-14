@@ -66,8 +66,8 @@ class MessagingService {
     setupMessageListener(handler) {
         chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             logger.log('BRIDGE', `Command: ${message.action}`);
-            handler(message, sendResponse);
-            return true; // Keep channel open for async sendResponse
+            const isAsync = handler(message, sendResponse);
+            if (isAsync === true) return true;
         });
     }
 }

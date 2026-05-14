@@ -12,7 +12,7 @@
     "*://*.capella.edu/*"
   ],
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "dist/background.entry.js"
   },
   "action": {
     "default_title": "Open Pilot Pro",
@@ -35,7 +35,7 @@
         "*://jigsaw.vitalsource.com/*",
         "*://*.capella.edu/*"
       ],
-      "js": ["intercept.js", "content.js"],
+      "js": ["dist/intercept.entry.js", "dist/content.entry.js"],
       "all_frames": true,
       "run_at": "document_start"
     },

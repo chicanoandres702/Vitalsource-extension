@@ -1,4 +1,4 @@
-// intercept.js
+// intercept.entry.js
 (function() {
     const DEBUG = false;
     function log(...args) {

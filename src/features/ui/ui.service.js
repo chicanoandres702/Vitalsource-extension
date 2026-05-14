@@ -37,7 +37,12 @@ class UiService {
             const el = pierceShadowAtPoint(e.clientX, e.clientY);
             shield.style.pointerEvents = 'auto';
             if (el) {
-                const selector = el.tagName.toLowerCase() + (el.id ? '#' + CSS.escape(el.id) : '');
+                let selector = el.tagName.toLowerCase();
+                if (el.id) {
+                    selector += '#' + CSS.escape(el.id);
+                } else if (typeof el.className === 'string' && el.className.trim()) {
+                    selector += el.className.split(' ').filter(c => c.trim()).map(c => '.' + CSS.escape(c)).join('');
+                }
                 stateManager.setCustomSelector(selector);
                 logger.log('UI', `Target locked: ${selector}`);
             }
