@@ -46,18 +46,23 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     // Use Chrome DevTools Protocol to print the page as a high-quality PDF
     chrome.debugger.attach({ tabId: targetTabId }, '1.3', () => {
       if (chrome.runtime.lastError) {
+        // Log the error for debugging purposes
+        console.error('[PilotPro] Debugger Attach Error:', chrome.runtime.lastError.message);
         sendResponse({ success: false, error: chrome.runtime.lastError.message });
         return;
       }
 
+      // Streamlined print options for a clean PDF output, removing all margins.
       const printOptions = {
         landscape: false,
         displayHeaderFooter: false,
         printBackground: true,
-        marginTop: 0.2,
-        marginBottom: 0.2,
-        marginLeft: 0.2,
-        marginRight: 0.2,
+        // Set margins to 0 for a full-bleed content capture,
+        // eliminating unnecessary whitespace around the content.
+        marginTop: 0,
+        marginBottom: 0,
+        marginLeft: 0,
+        marginRight: 0,
         paperWidth: 8.5,
         paperHeight: 11,
         preferCSSPageSize: true,
@@ -73,6 +78,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         } else if (result && result.data) {
           sendResponse({ success: true, pdfData: result.data });
         } else {
+          // This case should ideally not happen if no runtime.lastError but also no result.data
+          console.error('[PilotPro] printToPDF: Unexpected missing PDF data.');
           sendResponse({ success: false, error: 'Failed to generate PDF data' });
         }
       });
@@ -85,8 +92,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     // This allows the sidebar to refresh without the background script needing to manage storage
     console.log('[PilotPro] Broadcast: Capture Event');
   }
-
-  return false;
+  // For messages not handled by the if-conditions above, assume synchronous response (or no response needed).
+  return false; 
 });
 
 console.log('[PilotPro] Engine v10.0 Online');

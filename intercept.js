@@ -53,36 +53,51 @@
     };
 
     function processMetadata(data) {
-        let items = [];
+        const items = [];
+        const normalize = (item) => {
+            if (!item || typeof item !== 'object') return null;
+            const hasCfi = !!item.cfi;
+            const hasUrl = !!item.url || !!item.absoluteURL || !!item.absolute_url || !!item.href || !!item.path || !!item.uri;
+            if (!hasCfi && !hasUrl) return null;
+            return {
+                ...item,
+                absolute_url: item.absoluteURL || item.absolute_url || item.url || item.href || item.path || item.uri || ''
+            };
+        };
+
         if (Array.isArray(data)) {
             data.forEach(item => {
-                // Accept items with at least a cfi OR a url — don't require both.
-                // VitalSource TOC entries often have cfi but no standalone url.
-                if (item.cfi || item.url) {
-                    items.push({
-                        ...item,
-                        absolute_url: item.absoluteURL || item.absolute_url || item.url || ''
+                const normalized = normalize(item);
+                if (normalized) items.push(normalized);
+            });
+        } else if (data && typeof data === 'object') {
+            ['outline', 'table_of_contents', 'items', 'pages', 'pagebreaks'].forEach(key => {
+                if (Array.isArray(data[key])) {
+                    data[key].forEach(item => {
+                        const normalized = normalize(item);
+                        if (normalized) items.push(normalized);
                     });
                 }
             });
         }
+
         return items;
     }
 
     function detectAndSendMetadata(data, url) {
-        // Look for the specific shape: array of objects with cfi, path, title, page
         const items = processMetadata(data);
         if (items && items.length > 0) {
-            // Extract bookId from URL if possible
-            // Patterns: /books/BOOKID/... or bookshelf.vitalsource.com/#/books/BOOKID
             let bookId = null;
             const bookMatch = url.match(/\/books\/([^\/]+)/);
             if (bookMatch) bookId = bookMatch[1];
 
-            // Deduplicate items by cfi
             const uniqueItems = [];
             const seenCfi = new Set();
             for (let i = 0; i < items.length; i++) {
+                if (!items[i].cfi) {
+                    uniqueItems.push(items[i]);
+                    continue;
+                }
                 if (!seenCfi.has(items[i].cfi)) {
                     seenCfi.add(items[i].cfi);
                     uniqueItems.push(items[i]);
@@ -90,8 +105,9 @@
             }
 
             const isPagebreaks = url.includes('pagebreaks');
-            const messageType = isPagebreaks ? 'VS_PAGEBREAKS_JSON' : 'VS_OUTLINE_JSON';
-            
+            const isPages = !isPagebreaks && (url.includes('/pages') || url.includes('pages'));
+            const messageType = isPagebreaks ? 'VS_PAGEBREAKS_JSON' : isPages ? 'VS_PAGES_JSON' : 'VS_OUTLINE_JSON';
+
             log(`Detected Book Metadata (${messageType}) for`, bookId || 'unknown', 'from', url, `(${uniqueItems.length} items)`);
             window.postMessage({
                 type: messageType,

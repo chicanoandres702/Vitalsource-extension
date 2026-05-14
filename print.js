@@ -30,59 +30,40 @@ chrome.storage.local.get(['printDataCache'], (result) => {
         if (toolbarTitle) toolbarTitle.textContent = bookMetadata.title;
     }
 
-    // [MOD] Streamlined Assembler
-    log('Assembly', `Processing ${validPages.length} segments...`);
-    
-    // Group segments by chapter for better TOC flow
-    const chapters = bookOutline && bookOutline.length > 0 ? bookOutline : [{ title: 'Main Content', level: 0 }];
-    
-    chapters.forEach((chapter, cIdx) => {
-        const chapterDiv = document.createElement('div');
-        chapterDiv.className = 'pilot-page chapter-start';
-        chapterDiv.innerHTML = `
-            <div style="font-family:'Outfit';font-size:24px;font-weight:700;margin-bottom:20px;border-bottom:2px solid #eee;padding-bottom:10px;">
-                ${chapter.title}
-            </div>
-            <div class="pg-content"></div>
-        `;
-        
-        const contentArea = chapterDiv.querySelector('.pg-content');
-        
-        // Find pages belonging to this chapter (heuristic matching)
-        const relevantPages = validPages.filter(p => p.meta?.chapter === chapter.title);
-        
-        if (relevantPages.length > 0) {
-            relevantPages.forEach(p => {
-                const segment = document.createElement('div');
-                segment.className = 'pg-segment';
-                segment.innerHTML = p.html;
-                
-                // Content Clean-up
-                segment.querySelectorAll('script, style, iframe, button').forEach(el => el.remove());
-                
-                contentArea.appendChild(segment);
-            });
-            container.appendChild(chapterDiv);
-        }
-    });
+    log('Assembly', `Processing ${validPages.length} pages...`);
 
-    // Handle orphans (pages with no assigned chapter)
-    const orphans = validPages.filter(p => !chapters.some(c => c.title === p.meta?.chapter));
-    if (orphans.length > 0) {
-        const orphanDiv = document.createElement('div');
-        orphanDiv.className = 'pilot-page chapter-start';
-        orphanDiv.innerHTML = `<div class="pg-content"></div>`;
-        const contentArea = orphanDiv.querySelector('.pg-content');
-        orphans.forEach(p => {
-            const segment = document.createElement('div');
-            segment.className = 'pg-segment';
-            segment.innerHTML = p.html;
-            contentArea.appendChild(segment);
-        });
-        container.appendChild(orphanDiv);
+    if (bookOutline && bookOutline.length > 0) {
+        const tocPage = document.createElement('div');
+        tocPage.className = 'pilot-page';
+        tocPage.innerHTML = `
+            <div style="font-family:'Outfit',sans-serif;font-size:28px;font-weight:700;margin-bottom:18px;">
+                Table of Contents
+            </div>
+            <ol style="padding-left:20px;color:#334155;font-size:14px;line-height:1.7;">
+                ${bookOutline.map(item => `<li style="margin-bottom:10px;">${item.title || item.page || ''}</li>`).join('')}
+            </ol>
+        `;
+        container.appendChild(tocPage);
     }
 
-    if (progress) progress.textContent = `Vessel Reconstructed: ${validPages.length} Pages`;
+    validPages.forEach((p, idx) => {
+        const pageDiv = document.createElement('div');
+        pageDiv.className = 'pilot-page';
+        const label = p.meta?.pageLabel || `Page ${idx + 1}`;
+        const pageNumber = p.meta?.pageNumber || idx + 1;
+        pageDiv.innerHTML = `
+            <div style="font-size:12px;color:#64748b;margin-bottom:14px;">${label}</div>
+        `;
+
+        const segment = document.createElement('div');
+        segment.className = 'pg-segment';
+        segment.innerHTML = p.html;
+        segment.querySelectorAll('script, style, iframe, button, nav, header, footer, .spinner, [aria-busy="true"]').forEach(el => el.remove());
+        pageDiv.appendChild(segment);
+        container.appendChild(pageDiv);
+    });
+
+    if (progress) progress.textContent = `Pages assembled: ${validPages.length}`;
     const printBtn = document.getElementById('print-btn');
     if (printBtn) {
         printBtn.textContent = 'SAVE PDF';

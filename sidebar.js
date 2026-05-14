@@ -67,15 +67,19 @@ const Sidebar = {
         });
     },
 
-    triggerSnap() {
-        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-            if (tabs[0]) {
-                chrome.tabs.sendMessage(tabs[0].id, { 
-                    type: 'SNAP', 
-                    metadata: { pageIndex: Date.now() } 
-                });
-            }
-        });
+    /**
+     * Sends a SNAP message to the content script and awaits its response.
+     * @returns {Promise<Object>} The response from the content script, indicating success or failure.
+     */
+    async triggerSnap() {
+        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (tabs[0]) {
+            return chrome.tabs.sendMessage(tabs[0].id, {
+                type: 'SNAP',
+                metadata: { pageIndex: Date.now() }
+            });
+        }
+        return { success: false, error: 'No active tab found.' };
     },
 
     async handleClear() {
@@ -89,56 +93,97 @@ const Sidebar = {
         const pages = await PilotStorage.getAllPages();
         if (!pages.length) return alert('No pages captured. SNAP some content first.');
 
-        pages.sort((a, b) => a.index - b.index);
-        const title = pages[0].metadata?.title || 'PilotPro_Export';
+        pages.sort((a, b) => {
+            const aOrder = a.metadata?.pageInfo?.order ?? a.index;
+            const bOrder = b.metadata?.pageInfo?.order ?? b.index;
+            return aOrder - bOrder;
+        });
 
-        const contentHtml = pages.map(p => `
-            <div class="captured-page" style="page-break-after: always; padding: 20px; border-bottom: 1px solid #ddd; margin-bottom: 2em;">
-                ${p.html}
-            </div>
-        `).join('\n');
+        const firstMeta = pages[0].metadata || {};
+        const title = firstMeta.title || 'PilotPro Export';
+        const bookOutline = firstMeta.toc?.data || [];
+        const pagebreaks = firstMeta.pagebreaks?.data || [];
+        const globalStyles = firstMeta.styles || '';
+        const bookMetadata = { title };
 
-        const blob = new Blob([`
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="UTF-8">
-                <title>${title}</title>
-                <style>
-                    body { font-family: -apple-system, sans-serif; max-width: 800px; margin: 0 auto; padding: 40px; color: #1a1a1a; line-height: 1.6; }
-                    img { max-width: 100%; height: auto; display: block; margin: 1em auto; }
-                    h1, h2, h3, h4, h5, h6 { margin-top: 1em; margin-bottom: 0.5em; }
-                    p { margin-bottom: 1em; }
-                    br { display: block; margin-bottom: 0.5em; }
-                    svg, .arrow, [class*="arrow"] { display: none !important; }
-                    [style*="font-size"] { font-size: inherit !important; }
-                    iframe, script, style { display: none !important; }
-                    * { max-width: 100%; }
-                </style>
-            </head>
-            <body>
-                <h1>${title}</h1>
-                ${contentHtml}
-            </body>
-            </html>
-        `], { type: 'text/html' });
+        const validPages = pages.map((p, i) => {
+            const pageInfo = p.metadata?.pageInfo || {};
+            const pageLabel = pageInfo.page || pageInfo.title || `Page ${i + 1}`;
+            const pageNumber = pageInfo.pageNumber || i + 1;
+            return {
+                html: `<div class="page-wrapper" data-page="${pageNumber}">${p.html}</div>`,
+                meta: {
+                    pageLabel,
+                    pageNumber,
+                    chapter: pageInfo.chapter || pageInfo.title || ''
+                }
+            };
+        });
 
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${title.replace(/\s+/g, '_')}.html`;
-        a.click();
-        URL.revokeObjectURL(url);
+        chrome.storage.local.set({
+            printDataCache: {
+                validPages,
+                globalStyles,
+                bookMetadata,
+                bookOutline,
+                pagebreaks,
+                strippedCount: 0
+            }
+        }, () => {
+            chrome.tabs.create({ url: chrome.runtime.getURL('print.html') });
+        });
     },
 
     toggleAutoRip() {
         if (this.statusDisplay.textContent === 'RUNNING') {
             this.statusDisplay.textContent = 'STANDBY';
             this.statusDisplay.style.color = 'var(--text)';
+            this.stopAutoRip();
         } else {
             this.statusDisplay.textContent = 'RUNNING';
             this.statusDisplay.style.color = 'var(--cyan)';
+            this.startAutoRip();
         }
+    },
+
+    /**
+     * Initiates the automatic ripping process.
+     * It attempts to snap content, and only if successful, proceeds to turn the page.
+     * If a loading state is detected, it will retry snapping the same page on the next interval.
+     */
+    async startAutoRip() {
+        // Ensure only one interval is active
+        this.stopAutoRip();
+
+        this.autoRipInterval = setInterval(async () => {
+            if (this.statusDisplay.textContent === 'RUNNING') {
+                console.log('[PilotPro] AutoRip: Attempting snap...');
+                const snapResult = await this.triggerSnap();
+
+                if (!snapResult.success) {
+                    console.log(`[PilotPro] AutoRip: Snap failed ('${snapResult.error}'). Retrying on current page.`);
+                    return; // Do not turn page, retry on next interval
+                }
+
+                // After snap, turn page with longer delay for page load
+                setTimeout(() => this.turnPage('right'), 3000);
+            }
+        }, 8000); // Snap every 8 seconds
+    },
+
+    stopAutoRip() {
+        if (this.autoRipInterval) {
+            clearInterval(this.autoRipInterval);
+            this.autoRipInterval = null;
+        }
+    },
+
+    turnPage(direction) {
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            if (tabs[0]) {
+                chrome.tabs.sendMessage(tabs[0].id, { type: 'TURN_PAGE', direction });
+            }
+        });
     }
 };
 
