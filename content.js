@@ -11,6 +11,7 @@
   }
 
   console.log('[Pilot] Core initializing...');
+  setupBridge();
 
   const features = [
     'src/features/platform/detection.service.js',
@@ -31,6 +32,62 @@
     }
   }
 })();
+
+const contentResponseResolvers = new Map();
+
+function setupBridge() {
+  if (window.PilotBridgeSetup) return;
+  window.PilotBridgeSetup = true;
+
+  window.addEventListener('message', (event) => {
+    if (event.source !== window) return;
+
+    if (event.data?.pilotBridgeRequest) {
+      const { requestId, message } = event.data;
+      if (!requestId || !message) return;
+
+      chrome.runtime.sendMessage(message, (response) => {
+        window.postMessage({
+          pilotBridgeResponse: true,
+          requestId,
+          response
+        }, '*');
+      });
+      return;
+    }
+
+    if (event.data?.pilotBridgeResponse) {
+      const resolver = contentResponseResolvers.get(event.data.requestId);
+      if (!resolver) return;
+      contentResponseResolvers.delete(event.data.requestId);
+      resolver(event.data.response);
+    }
+  });
+
+  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request == null) {
+      return false;
+    }
+
+    if (request?.contentBridgeRequest) {
+      if (!request.requestId) return false;
+      contentResponseResolvers.set(request.requestId, sendResponse);
+      window.postMessage({
+        pilotBridgeInbound: true,
+        requestId: request.requestId,
+        action: request.action,
+        payload: request.payload
+      }, '*');
+      return true;
+    }
+
+    window.postMessage({
+      pilotBridgeInbound: true,
+      message: request
+    }, '*');
+    return false;
+  });
+}
 
 function injectScript(file) {
   return new Promise((resolve, reject) => {

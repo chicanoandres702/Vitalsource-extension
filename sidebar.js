@@ -24,6 +24,61 @@ const Sidebar = {
     document.getElementById('btn-clear')?.addEventListener('click', () => this.handleClear());
   },
 
+  async getActiveTabId() {
+    return new Promise((resolve) => {
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        resolve(tabs[0]?.id ?? null);
+      });
+    });
+  },
+
+  async sendTabRequest(message) {
+    const tabId = await this.getActiveTabId();
+    if (!tabId) return null;
+    return new Promise((resolve) => {
+      chrome.tabs.sendMessage(tabId, message, (response) => {
+        const msgErr = chrome.runtime.lastError;
+        if (msgErr) {
+          console.warn('[Pilot] Tab request failed:', msgErr.message);
+          return resolve(null);
+        }
+        resolve(response);
+      });
+    });
+  },
+
+  async getStorageCount() {
+    const response = await this.sendTabRequest({
+      contentBridgeRequest: true,
+      requestId: `sidebar_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+      action: 'GET_PILOT_STORAGE_COUNT'
+    });
+    return response?.count ?? 0;
+  },
+
+  async getAllPages() {
+    const response = await this.sendTabRequest({
+      contentBridgeRequest: true,
+      requestId: `sidebar_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+      action: 'GET_PILOT_STORAGE_PAGES'
+    });
+    return Array.isArray(response?.pages) ? response.pages : [];
+  },
+
+  async clearRemoteStorage() {
+    await this.sendTabRequest({
+      contentBridgeRequest: true,
+      requestId: `sidebar_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+      action: 'CLEAR_PILOT_STORAGE'
+    });
+  },
+
+  async sendCommandToActiveTab(command) {
+    const tabId = await this.getActiveTabId();
+    if (!tabId) return;
+    chrome.tabs.sendMessage(tabId, { type: 'CMD', ...command });
+  },
+
   setupListeners() {
     chrome.runtime.onMessage.addListener((msg) => {
       if (msg.type === 'PILOT_PAGE_CAPTURED') this.refreshUI();
@@ -32,21 +87,12 @@ const Sidebar = {
   },
 
   async refreshUI() {
-    console.log("Object before calling getCount:", window.PilotStorage); // Replace 'yourObject' with the actual variable name
-    let count = 0;
-    if (window.PilotStorage && typeof window.PilotStorage.getCount === 'function') {
-      count = await window.PilotStorage.getCount();
-    } else {
-      console.warn('window.PilotStorage or getCount is not available');
-    }
+    const count = await this.getStorageCount();
     if (this.progressText) this.progressText.textContent = `${count} Pages Saved`;
   },
 
   triggerPick() {
- 
-   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      if (tabs[0]) chrome.tabs.sendMessage(tabs[0].id, { type: 'PICK' });
-    });
+    this.sendCommandToActiveTab({ action: 'PICK' });
   },
   // Example: send a message to background and handle async response
   async sendAsyncOperation(data) {
@@ -64,22 +110,18 @@ const Sidebar = {
     });
   },
   triggerSnap() {
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      if (tabs[0]) chrome.tabs.sendMessage(tabs[0].id, { type: 'SNAP' });
-    });
+    this.sendCommandToActiveTab({ action: 'SNAP' });
   },
 
   async handleClear() {
     if (confirm('Permanently delete all session data?')) {
-      await window.PilotStorage.clear();
+      await this.clearRemoteStorage();
       await this.refreshUI();
     }
   },
 
   toggleAutoRip() {
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      if (tabs[0]) chrome.tabs.sendMessage(tabs[0].id, { type: 'TOGGLE_AUTO_RIP' });
-    });
+    this.sendCommandToActiveTab({ action: 'ENGINE_CONFIG', state: true, speed: 800 });
   },
 
   /**
@@ -87,7 +129,7 @@ const Sidebar = {
    * Aggregates pages in a bridge tab and requests high-fidelity native print
    */
   async handlePdfExport() {
-    const pages = await window.PilotStorage.getAllPages();
+    const pages = await this.getAllPages();
     if (!pages.length) return alert('No pages captured yet.');
 
     if (this.statusDisplay) this.statusDisplay.textContent = 'PREPARING...';
