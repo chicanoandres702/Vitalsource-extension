@@ -107,7 +107,13 @@ const Sidebar = {
                 <style>
                     body { font-family: -apple-system, sans-serif; max-width: 800px; margin: 0 auto; padding: 40px; color: #1a1a1a; line-height: 1.6; }
                     img { max-width: 100%; height: auto; display: block; margin: 1em auto; }
-                    h1 { text-align: center; border-bottom: 2px solid #eee; padding-bottom: 0.5em; }
+                    h1, h2, h3, h4, h5, h6 { margin-top: 1em; margin-bottom: 0.5em; }
+                    p { margin-bottom: 1em; }
+                    br { display: block; margin-bottom: 0.5em; }
+                    svg, .arrow, [class*="arrow"] { display: none !important; }
+                    [style*="font-size"] { font-size: inherit !important; }
+                    iframe, script, style { display: none !important; }
+                    * { max-width: 100%; }
                 </style>
             </head>
             <body>
