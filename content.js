@@ -1,4 +1,12 @@
+/**
+ * Refactored VitalSource Extension Content Script
+ * Improved pagebreak handling and modular organization
+ */
+
 const DEBUG = false;
+
+// ==================== UTILITIES ====================
+
 function log(category, message, data = "") {
     if (!DEBUG) return;
     const color = {
@@ -20,41 +28,27 @@ function debounce(fn, ms) {
     return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
 }
 
-// Global book outline storage
-window.__pilotpro_outline = [];
-let __current_book_id = null;
-
-window.__pilotpro_pagebreaks = [];
-
-window.addEventListener('message', (ev) => {
-    if (ev.data && ev.data.type === 'VS_OUTLINE_JSON') {
-        window.__pilotpro_outline = ev.data.data;
-        __current_book_id = ev.data.bookId || __current_book_id;
-        
-        if (DEBUG) log('DATA', `Captured TOC for Book: ${__current_book_id}. Items: ${window.__pilotpro_outline.length}`);
-        
-        try {
-            if (__current_book_id) {
-                const saveObj = { bookId: __current_book_id };
-                saveObj[`outline_${__current_book_id}`] = window.__pilotpro_outline;
-                chrome.storage.local.set(saveObj);
-            }
-        } catch (e) {}
-    } else if (ev.data && ev.data.type === 'VS_PAGEBREAKS_JSON') {
-        window.__pilotpro_pagebreaks = ev.data.data;
-        __current_book_id = ev.data.bookId || __current_book_id;
-        
-        if (DEBUG) log('DATA', `Captured Pagebreaks for Book: ${__current_book_id}. Items: ${window.__pilotpro_pagebreaks.length}`);
-        
-        try {
-            if (__current_book_id) {
-                const saveObj = { bookId: __current_book_id };
-                saveObj[`pagebreaks_${__current_book_id}`] = window.__pilotpro_pagebreaks;
-                chrome.storage.local.set(saveObj);
-            }
-        } catch (e) {}
+function findDeep(selector, root = document) {
+    if (!selector) return null;
+    try { const el = root.querySelector(selector); if (el) return el; } catch (e) {}
+    for (const node of root.querySelectorAll('*')) {
+        if (node.shadowRoot) {
+            const found = findDeep(selector, node.shadowRoot);
+            if (found) return found;
+        }
     }
-});
+    return null;
+}
+
+function pierceShadowAtPoint(x, y) {
+    let el = document.elementFromPoint(x, y);
+    while (el && el.shadowRoot) {
+        const inner = el.shadowRoot.elementFromPoint(x, y);
+        if (!inner || inner === el) break;
+        el = inner;
+    }
+    return el;
+}
 
 function getContextId() {
     let url = window.location.href;
@@ -71,31 +65,50 @@ function getContextId() {
     return normalized;
 }
 
-const CONTEXT_ID = getContextId();
-const IS_TOP = window.top === window.self;
-const SENSOR_ID = 'vst-' + Math.random().toString(36).substring(2, 7);
-
 function safeSend(msg) {
     try {
         if (!chrome?.runtime?.id) return;
         chrome.runtime.sendMessage(msg, () => {
-            if (chrome.runtime.lastError) { /* ignore */ }
+            if (chrome.runtime.lastError) {
+                // ignore runtime errors from disconnected contexts
+            }
         });
-    } catch (e) { /* ignore context invalidated */ }
-}
-
-function findDeep(selector, root = document) {
-    if (!selector) return null;
-    try { const el = root.querySelector(selector); if (el) return el; } catch (e) {}
-    for (const node of root.querySelectorAll('*')) {
-        if (node.shadowRoot) {
-            const found = findDeep(selector, node.shadowRoot);
-            if (found) return found;
-        }
+    } catch (e) {
+        // ignore invalidated extension context or cross-frame send failures
     }
-    return null;
 }
 
+// ==================== STATE MANAGEMENT ====================
+
+const CONTEXT_ID = getContextId();
+const IS_TOP = window.top === window.self;
+const SENSOR_ID = 'vst-' + Math.random().toString(36).substring(2, 7);
+
+// Global state
+window.__pilotpro_outline = [];
+window.__pilotpro_pagebreaks = [];
+
+let currentBookId = null;
+let sessionHashes = new Set();
+let capturedPageCount = 0;
+let isScraping = false;
+let autoPilot = false;
+let customSelector = null;
+let autoPilotStopPage = null;
+let flipDelay = 1200;
+let lastFlipTime = 0;
+let isTransitioning = false;
+let hasSnappedCurrentPage = false;
+let isSnapping = false;
+let autoSnapFired = false;
+let pageChangeObserver = null;
+let lastContentFP = '';
+let lastTextHash = '';
+let _lastStabilizeFP = '';
+let _stabilizeReady = false;
+let spinnerWaitAttempts = 0;
+
+// Slider cache
 let _sliderCache = null, _sliderCacheTs = 0;
 function getSlider() {
     if (_sliderCache && Date.now() - _sliderCacheTs < 3000) return _sliderCache;
@@ -103,6 +116,7 @@ function getSlider() {
     _sliderCacheTs = Date.now();
     return _sliderCache;
 }
+
 function invalidateSliderCache() { _sliderCache = null; }
 
 function pierceShadowAtPoint(x, y) {
@@ -375,24 +389,6 @@ function cleanAndResolveHTML(node) {
     return wrapper.innerHTML || '';
 }
 
-let capturedPageCount = 0;
-let isScraping = false;
-let autoPilot = false;
-let customSelector = null;
-let sessionHashes = new Set();
-let lastFlipTime = 0;
-let isSnapping = false;
-let flipDelay = 1200; 
-let pageChangeObserver = null;
-let autoSnapFired = false;
-let isTransitioning = false;
-let _lastStabilizeFP = '';
-let _stabilizeReady = false;
-let hasSnappedCurrentPage = false; 
-let autoPilotStopPage = null; // New boundary tracking
-let lastContentFP = '';
-let lastTextHash = '';
-
 const NEXT_SELECTORS = [
     'button[aria-label="Next"]',
     '[aria-label="Next page"]',
@@ -626,8 +622,7 @@ function triggerNext() {
 
 // Removed goToFirstPage - navigation is now manifest-driven.
 
-const MAX_RETRIES = 15; 
-let spinnerWaitAttempts = 0;
+const MAX_RETRIES = 15;
 
 function snapWithRetry(attempt = 0, force = false) {
     // 0. Boundary Check: Ensure we don't snap "one more" than requested
@@ -1024,6 +1019,37 @@ function onSpaNavigation() {
 window.addEventListener('pilotpro_spa_nav', onSpaNavigation);
 window.addEventListener('popstate', onSpaNavigation);
 window.addEventListener('hashchange', onSpaNavigation);
+
+// Message event listeners for outline and pagebreaks
+window.addEventListener('message', (ev) => {
+    if (ev.data && ev.data.type === 'VS_OUTLINE_JSON') {
+        window.__pilotpro_outline = ev.data.data;
+        currentBookId = ev.data.bookId || currentBookId;
+
+        if (DEBUG) log('DATA', `Captured TOC for Book: ${currentBookId}. Items: ${window.__pilotpro_outline.length}`);
+
+        try {
+            if (currentBookId) {
+                const saveObj = { bookId: currentBookId };
+                saveObj[`outline_${currentBookId}`] = window.__pilotpro_outline;
+                chrome.storage.local.set(saveObj);
+            }
+        } catch (e) {}
+    } else if (ev.data && ev.data.type === 'VS_PAGEBREAKS_JSON') {
+        window.__pilotpro_pagebreaks = ev.data.data;
+        currentBookId = ev.data.bookId || currentBookId;
+
+        if (DEBUG) log('DATA', `Captured Pagebreaks for Book: ${currentBookId}. Items: ${window.__pilotpro_pagebreaks.length}`);
+
+        try {
+            if (currentBookId) {
+                const saveObj = { bookId: currentBookId };
+                saveObj[`pagebreaks_${currentBookId}`] = window.__pilotpro_pagebreaks;
+                chrome.storage.local.set(saveObj);
+            }
+        } catch (e) {}
+    }
+});
 
 // Listen for arrow key navigation (often used in top window readers)
 window.addEventListener('keydown', (e) => {

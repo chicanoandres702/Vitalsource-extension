@@ -35,9 +35,9 @@
         "*://jigsaw.vitalsource.com/*",
         "*://*.capella.edu/*"
       ],
-      "js": ["content.js"],
+      "js": ["intercept.js", "content.js"],
       "all_frames": true,
-      "run_at": "document_idle"
+      "run_at": "document_start"
     },
     {
       "matches": [

@@ -35,15 +35,26 @@ chrome.tabs.onUpdated.addListener(async (tabId, info, tab) => {
   }
 });
 
+// Store references to active side panel ports if using long-lived connections
+// const activeSidePanels = new Map();
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  // Handle PING messages from other parts of the extension (e.g., sidebar)
+  if (request.type === 'PING') {
+    console.log(`Background received PING (ID: ${request.id}) from ${request.origin || 'unknown'}. Responding PONG.`);
+    sendResponse({ type: 'PONG', id: request.id, status: 'active' });
+    return true; // Important: indicate asynchronous response
+  }
+
   if (request.action === 'CREATE_NATIVE_PDF') {
     const targetTabId = sender.tab.id;
     chrome.debugger.attach({ tabId: targetTabId }, '1.3', () => {
       if (chrome.runtime.lastError) {
+        console.error('chrome.debugger.attach error:', chrome.runtime.lastError.message);
         sendResponse({ success: false, error: chrome.runtime.lastError.message });
         return;
       }
-      
+
       chrome.debugger.sendCommand({ tabId: targetTabId }, 'Page.printToPDF', {
         landscape: false,
         displayHeaderFooter: false,
@@ -56,6 +67,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         paperHeight: 11,
         preferCSSPageSize: true
       }, (result) => {
+        if (chrome.runtime.lastError) {
+          console.error('chrome.debugger.sendCommand error:', chrome.runtime.lastError.message);
+          sendResponse({ success: false, error: chrome.runtime.lastError.message });
+          return;
+        }
+
         chrome.debugger.detach({ tabId: targetTabId });
         if (chrome.runtime.lastError) {
           sendResponse({ success: false, error: chrome.runtime.lastError.message });
