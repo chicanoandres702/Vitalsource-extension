@@ -5,10 +5,20 @@
  */
 
 export const CONTENT_SELECTORS = [
-    'mosaic-book', 'mosaic-page', '#epub-content-container', 
-    'section.chapter-rw', '.mosaic-page', '.epub-container',
-    '.vst-main', 'main[role="main"]', '.vst-cover', '.cover-image', '.book-cover',
-    '.front-matter', 'img[alt*="cover" i]'
+    'body > mosaic-book',
+    'mosaic-book',
+    'mosaic-page',
+    '#epub-content-container', 
+    'section.chapter-rw',
+    '.mosaic-page',
+    '.epub-container',
+    '.vst-main',
+    'main[role="main"]',
+    '.vst-cover',
+    '.cover-image',
+    '.book-cover',
+    '.front-matter',
+    'img[alt*="cover" i]'
 ];
 
 export const UNWANTED_SELECTORS = [

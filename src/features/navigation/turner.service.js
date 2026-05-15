@@ -56,26 +56,47 @@ class TurnerService {
   }
 
   /** 
-   * Dispatches navigation requests to the background script.
-   * This allows for 'isTrusted' events via the Debugger API.
-   */
-  async requestGlobalNavigation(direction) {
-    const key = direction === 'next' ? 'ArrowRight' : 'ArrowLeft';
-    const code = direction === 'next' ? KEY_CODES.ARROW_RIGHT : KEY_CODES.ARROW_LEFT;
+    * Dispatches navigation requests.
+    * First tries direct DOM event (worked in earlier versions), 
+    * falls back to background debugger for trusted events if needed.
+    */
+   async requestGlobalNavigation(direction) {
+     const key = direction === 'next' ? 'ArrowRight' : 'ArrowLeft';
+     const code = direction === 'next' ? KEY_CODES.ARROW_RIGHT : KEY_CODES.ARROW_LEFT;
 
-    return new Promise((resolve, reject) => {
-      chrome.runtime.sendMessage({ 
-        type: 'REQUEST_NAVIGATION', 
-        direction,
-        key,
-        keyCode: code,
-        method: 'chrome_debugger'
-      }, (response) => {
-        if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
-        else resolve(response);
-      });
-    });
-  }
+     // Try direct dispatch first (worked reliably in earlier versions)
+     try {
+       const event = new KeyboardEvent('keydown', {
+         key,
+         code: key,
+         keyCode: code,
+         which: code,
+         bubbles: true,
+         cancelable: true
+       });
+       document.dispatchEvent(event);
+       // Also try top window
+       if (window.top && window.top !== window) {
+         window.top.document.dispatchEvent(event);
+       }
+       return 'direct';
+     } catch (e) {
+       // Fall back to debugger
+     }
+
+     return new Promise((resolve, reject) => {
+       chrome.runtime.sendMessage({ 
+         type: 'REQUEST_NAVIGATION', 
+         direction,
+         key,
+         keyCode: code,
+         method: 'chrome_debugger'
+       }, (response) => {
+         if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
+         else resolve(response);
+       });
+     });
+   }
 
   /**
    * Moves to next page and returns a promise that resolves when the UI has changed.
@@ -97,12 +118,17 @@ class TurnerService {
       stateManager.setTransitioning(true);
       if (!isExtensionAlive()) return false;
 
-      // Design Intent: Always use the background debugger to navigate. 
-      // This bypasses CORS issues when the content script is in an iframe 
-      // and the buttons are in the top-level shell.
-      await this.requestGlobalNavigation(direction);
-      const success = await this.waitForPageChange(previousPageText, TIMEOUTS.PAGE_CHANGE_MAX);
+      const navResult = await this.requestGlobalNavigation(direction);
 
+      // For direct dispatch (the reliable old method), release lock quickly
+      if (navResult === 'direct') {
+        // Give the reader a moment to react, then release
+        await new Promise(r => setTimeout(r, 400));
+        return true;
+      }
+
+      // For debugger fallback, wait for page change detection
+      const success = await this.waitForPageChange(previousPageText, TIMEOUTS.PAGE_CHANGE_MAX);
       return success;
     } finally {
       stateManager.setTransitioning(false);

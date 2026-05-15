@@ -41,11 +41,12 @@ function handleCommand(message, sendResponse) {
     switch (message.action) {
         case 'ENGINE_CONFIG':
             stateManager.configureEngine(message);
-            if (message.state) {
+            // Only start autonomous mode if explicitly requested by initiate button
+            if (message.state && message.initiate === true) {
                 stateManager.clearSessionHashes();
-                captureService.scheduleSnap(500);
                 coordinatorService.startAutomation();
-            } else {
+                captureService.scheduleSnap(800);
+            } else if (!message.state) {
                 coordinatorService.stopAutomation();
             }
             break;
@@ -61,6 +62,8 @@ function handleCommand(message, sendResponse) {
                 let selector = target.tagName.toLowerCase();
                 if (target.id) {
                     selector = '#' + target.id;
+                } else if (target.tagName.toLowerCase() === 'mosaic-book') {
+                    selector = 'body > mosaic-book, mosaic-book';
                 } else if (target.className) {
                     selector += '.' + target.className.trim().split(/\s+/).join('.');
                 }

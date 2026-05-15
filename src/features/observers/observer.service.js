@@ -50,9 +50,8 @@ class ObserverService {
             }
         }, 10000);
 
-        if (!stateManager.getIsScraping()) {
-            logger.log('SENSOR', 'Engine not active — auto-snap suppressed. Arming page-change observer only.');
-            this.armPageChangeObserver();
+        if (!stateManager.getAutoPilot() && !stateManager.getIsScraping()) {
+            logger.log('SENSOR', 'Engine not active — auto-snap fully suppressed. No observers armed.');
             return;
         }
 

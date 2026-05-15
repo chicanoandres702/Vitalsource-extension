@@ -68,7 +68,7 @@ export const manifestRipService = {
         }
         
         currentRipIndex = 0;
-        this.sendCommand({ action: 'ENGINE_CONFIG', state: true, speed: this.flipDelay, forceManualStep: (chapterTreeService.getMode() === 'full') });
+        this.sendCommand({ action: 'ENGINE_CONFIG', state: true, speed: this.flipDelay, initiate: true, forceManualStep: (chapterTreeService.getMode() === 'full') });
         this.processQueue();
     },
 

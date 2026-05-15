@@ -66,7 +66,13 @@ class ContentDetector {
             if (this.isContentValid(el)) return el;
         }
 
-        // Smart fallback: find the <section> with the most text content
+        // Smart fallback: strongly prefer mosaic-book container (contains the page iframe)
+        const mosaicBook = document.querySelector('body > mosaic-book, mosaic-book');
+        if (mosaicBook && this.isContentValid(mosaicBook)) {
+            return mosaicBook;
+        }
+
+        // Fallback: find the <section> with the most text content
         const sections = document.querySelectorAll('section[role="region"], section.sect2, section[epub\\:type], section');
         let bestSection = null;
         let maxText = 0;

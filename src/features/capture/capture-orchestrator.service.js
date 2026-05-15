@@ -77,6 +77,9 @@ export const captureOrchestrator = {
         const result = captureEngine.executeCapture(target, finalHtml, force);
         if (result === 'retry') {
             setTimeout(() => this.snapWithRetry(0, force), 2500);
+        } else if (stateManager.getAutoPilot()) {
+            // Right after successful snap, auto-advance when in autonomous mode
+            setTimeout(() => navigationService.nextPage(), 800);
         }
     }
 };

@@ -11,15 +11,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const { type } = message;
 
     if (type === 'REQUEST_NAVIGATION') {
-        const tabId = sender.tab?.id;
-        if (!tabId) return;
-        
-        // Design Intent: Ensure focus before hardware event injection.
-        chrome.tabs.update(tabId, { active: true }).catch(() => {});
-        
-        navigationBackground.handleNavigationRequest(tabId, message.keyCode)
-            .then(status => sendResponse({ status }))
-            .catch(err => sendResponse({ status: 'error', error: err.message }));
+        // Always target the top-level active tab (not child frames/iframes)
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            const tabId = tabs[0]?.id;
+            if (!tabId) {
+                sendResponse({ status: 'error', error: 'No active tab' });
+                return;
+            }
+            
+            // Design Intent: Ensure focus before hardware event injection.
+            chrome.tabs.update(tabId, { active: true }).catch(() => {});
+            
+            navigationBackground.handleNavigationRequest(tabId, message.keyCode)
+                .then(status => sendResponse({ status }))
+                .catch(err => sendResponse({ status: 'error', error: err.message }));
+        });
         return true; 
     }
 
@@ -80,3 +86,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 // Design Intent: Log initialization to verify the entry point is active.
 console.log('[PilotPro] Background Engine Initialized.');
+
+// Open sidebar when the extension icon is clicked
+chrome.action.onClicked.addListener((tab) => {
+    if (tab?.id) {
+        chrome.sidePanel.open({ tabId: tab.id }).catch(() => {});
+    }
+});

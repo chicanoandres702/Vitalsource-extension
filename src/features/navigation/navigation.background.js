@@ -42,9 +42,26 @@ export const navigationBackground = {
 
             console.log(`[Debugger] Successfully attached to Tab ${tabId}`);
 
-            // Step 1: Force focus to the main window (Frame 0)
+            // Step 1: Force focus to the main window + mosaic-book iframe (VitalSource specific)
             chrome.debugger.sendCommand(target, 'Runtime.evaluate', {
-                expression: 'window.focus();'
+                expression: `
+                    window.focus();
+                    try {
+                        const book = document.querySelector('mosaic-book');
+                        if (book) {
+                            if (book.shadowRoot) {
+                                const iframe = book.shadowRoot.querySelector('iframe');
+                                if (iframe && iframe.contentWindow) {
+                                    iframe.contentWindow.focus();
+                                    const doc = iframe.contentDocument || iframe.contentWindow.document;
+                                    if (doc) doc.dispatchEvent(new Event('focus'));
+                                }
+                            }
+                            book.focus?.();
+                        }
+                    } catch(e) {}
+                `,
+                userGesture: true
             }, () => {
                 // Step 2: Send the KeyDown
                 chrome.debugger.sendCommand(target, 'Input.dispatchKeyEvent', {
@@ -54,7 +71,7 @@ export const navigationBackground = {
                     modifiers: 0, // Design Intent: Explicitly neutral modifiers to match VS expectations
                     isTrusted: true
                 }, () => {
-                    // Step 3: Small delay for VS reflow stability
+                    // Step 3: Delay for VS reflow stability (increased for mosaic-book)
                     setTimeout(() => {
                         chrome.debugger.sendCommand(target, 'Input.dispatchKeyEvent', {
                             type: 'keyUp',
@@ -67,7 +84,7 @@ export const navigationBackground = {
                                 callback();
                             });
                         });
-                    }, 50);
+                    }, 120);
                 });
             });
         });
