@@ -1,0 +1,19 @@
+/**
+ * scraper.manager.js
+ * Intent: Manage scraper state and resolve ReferenceErrors regarding element positioning.
+ */
+
+export const ScraperManager = {
+  /**
+   * Checks if an element is fixed to avoid capture errors.
+   * @param {HTMLElement} element 
+   * @returns {boolean}
+   */
+  checkIsFixed(element) {
+    if (!element) return false;
+    
+    const style = window.getComputedStyle(element);
+    const isFixed = style.position === 'fixed'; // Explicit declaration to prevent ReferenceError
+    return isFixed;
+  }
+};

@@ -1,52 +1,94 @@
+
 /**
  * Utility functions for hashing, debouncing, and DOM operations
  */
 
 export function quickHash(str) {
-    let h = 5381;
-    const sample = str ? str.substring(0, 2500) : '';
-    for (let i = 0; i < sample.length; i++) h = ((h << 5) + h) ^ sample.charCodeAt(i);
-    return (h >>> 0).toString(36);
-}
-
-export function debounce(fn, ms) {
-    let t;
-    return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
-}
-
-export function findDeep(selector, root = document) {
-    if (!selector) return null;
-    try { const el = root.querySelector(selector); if (el) return el; } catch (e) {}
-    for (const node of root.querySelectorAll('*')) {
-        if (node.shadowRoot) {
-            const found = findDeep(selector, node.shadowRoot);
-            if (found) return found;
-        }
+    // Design Intent: FNV-1a 32-bit hash for high-speed content comparison
+    let h = 2166136261;
+    for (let i = 0; i < str.length; i++) {
+        h ^= str.charCodeAt(i);
+        h = Math.imul(h, 16777619);
     }
-    return null;
+    return (h >>> 0).toString(16);
+}
+
+export function debounce(func, wait) {
+    let timeout;
+    return (...args) => {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func(...args), wait);
+    };
 }
 
 export function pierceShadowAtPoint(x, y) {
-    let el = document.elementFromPoint(x, y);
-    while (el && el.shadowRoot) {
-        const inner = el.shadowRoot.elementFromPoint(x, y);
-        if (!inner || inner === el) break;
-        el = inner;
+    let currentElement = document.elementFromPoint(x, y);
+    while (currentElement) {
+        // Prioritize Shadow DOM traversal
+        if (currentElement.shadowRoot) {
+            const shadowElement = currentElement.shadowRoot.elementFromPoint(x, y);
+            if (shadowElement && shadowElement !== currentElement) {
+                currentElement = shadowElement;
+                continue;
+            }
+        }
+        // Traverse into same-origin iframes
+        if (currentElement.tagName === 'IFRAME') {
+            try {
+                const iframeDocument = currentElement.contentDocument || currentElement.contentWindow.document;
+                const iframeRect = currentElement.getBoundingClientRect();
+                const elementInIframe = iframeDocument.elementFromPoint(x - iframeRect.left, y - iframeRect.top);
+                if (elementInIframe) {
+                    currentElement = elementInIframe;
+                    continue;
+                }
+            } catch (e) {
+                // Cross-origin iframe, cannot access document. Stop traversing this path.
+            }
+        }
+        // If no deeper element found in shadow DOM or iframe, break the loop
+        break;
     }
-    return el;
+    return currentElement;
 }
 
 export function getContextId() {
-    let url = window.location.href;
-    let isbnMatch = url.match(/(\d{10,13})/);
-    if (!isbnMatch && document.referrer) {
-        isbnMatch = document.referrer.match(/(\d{10,13})/);
-    }
+    // Design Intent: Prioritize URL-based ISBN detection to prevent "Context Drift" 
+    // when stale manifest data exists in localStorage for other books.
+    const url = window.location.href;
+    const match = (str) => str?.match(/(\d{10,13})/);
+    
+    let isbnMatch = match(url) || match(document.referrer);
     if (!isbnMatch) {
-        try { isbnMatch = window.top.location.href.match(/(\d{10,13})/); } catch(e) {}
+        try { isbnMatch = match(window.top.location.href); } catch(e) {}
     }
+
+    if (isbnMatch) return isbnMatch[0].toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    // Fallback: Persistent Storage (Last resort if URL is obfuscated)
+    try {
+        const tocKey = Object.keys(localStorage).find(k => k.startsWith('__VS_TOC_'));
+        if (tocKey) return tocKey.split('_').pop();
+    } catch (e) {}
+
     const epubMatch = url.match(/epub\/(.*?)\//);
-    const id = isbnMatch ? isbnMatch[1] : (epubMatch ? epubMatch[1] : 'vessel_global');
-    const normalized = id.toLowerCase().replace(/[^a-z0-9]/g, '');
-    return normalized;
+    return (epubMatch ? epubMatch[1] : 'vessel_global').toLowerCase().replace(/[^a-z0-9]/g, '');
 }
+
+/**
+ * Heartbeat check for extension context validity.
+ * Design Intent: Prevent "Extension context invalidated" crashes in zombie 
+ * content scripts after extension updates/reloads.
+ */
+export function isExtensionAlive() {
+    try {
+        // Design Intent: Explicitly check for property access to trigger the 
+        // context error early inside a safe try/catch block.
+        return !!(typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id);
+    } catch (e) {
+        return false;
+    }
+}
+
+/** Promisified timeout for async orchestration. */
+export const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));

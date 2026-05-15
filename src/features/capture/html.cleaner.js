@@ -1,7 +1,7 @@
 /**
  * HTML cleaning and processing service
  */
-import { findDeep } from '../../services/utils.service.js';
+import { findDeep } from '../../services/dom.service.js';
 
 const UNWANTED_SELECTORS = [
     '.pbk-page-header', '.vst-navigation-header', '.epub-running-head',

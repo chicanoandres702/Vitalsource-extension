@@ -1,0 +1,28 @@
+# AI Exclusion File - Pilot Pro Extension
+# Purpose: Adhere to Section 4 of the Constitution by reducing context noise.
+
+# Build artifacts (prevents context poisoning from bundled code)
+dist/
+build/
+.next/
+
+# Dependencies
+node_modules/
+
+# Compiled entry points and maps
+*.entry.js
+*.map
+
+# Graphics and icons (binary noise)
+*.svg
+*.png
+*.jpg
+*.ico
+
+# Dependency locks (high token cost, no logic)
+package-lock.json
+yarn.lock
+
+# Environment files
+.env
+.env.*

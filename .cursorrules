@@ -1,0 +1,40 @@
+# Cursor Rules - Pilot Pro Extension
+# Purpose: Enforce the AI Constitution for code generation and review.
+
+# Section 1: Core Architectural Directives
+
+# Rule 1.1: The 100-Line Law
+# Files MUST NOT exceed 100 lines.
+max_lines: 100
+
+# Rule 1.2: The Why Mandate
+# Comments must explain the design intent, not the syntax.
+# This is a guideline for AI, hard to enforce programmatically.
+
+# Rule 1.3: Modular First
+# Prioritize small, reusable components. Use Interfaces to define clear boundaries.
+# This encourages smaller functions and clear API definitions.
+
+# Rule 1.4: Clean Code
+# No magic numbers. Use named constants. Prioritize readability over cleverness.
+no_magic_numbers: true
+
+# Rule 1.5: Contextual Naming
+# Files must use descriptive prefixes (e.g., 'setup.service.ts') to prevent AI context loss.
+# Enforce specific naming patterns for common file types.
+file_name_patterns:
+  "*.service.js": "^[a-z_]+\\.service\\.js$"
+  "*.manager.js": "^[a-z_]+\\.manager\\.js$"
+  "*.util.js": "^[a-z_]+\\.util\\.js$"
+
+# Rule 1.6: Feature Architecture
+# All business logic must reside in 'src/features/<feature>/'.
+path_patterns:
+  "src/features/**/*.js": "must reside in src/features"
+
+# Section 5: Language-Specific Standards (TypeScript/JS)
+
+# Rule 5.1: Use Functional Programming. Avoid 'any'. Prefer 'unknown' for unsafe types.
+# For JavaScript, this translates to avoiding 'var' and preferring 'const'/'let', and pure functions.
+no_var: true
+prefer_const: true

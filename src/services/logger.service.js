@@ -15,9 +15,29 @@ class Logger {
     }
 
     log(category, message, data = "") {
+        // Persistent background logging for session tracking
+        try {
+            if (typeof chrome !== 'undefined' && chrome.runtime?.id) {
+                this.dispatchBackgroundLog({
+                    type: 'LOG_EVENT',
+                    category,
+                    message,
+                    data: (data && typeof data === 'object') ? JSON.parse(JSON.stringify(data)) : String(data),
+                    timestamp: new Date().toISOString()
+                });
+            }
+        } catch (e) {}
+
         if (!this.debug) return;
         const color = this.colors[category] || '#4e6580';
         console.log(`%c[PilotPro-${category}] %c${message}`, `color:${color};font-weight:bold;`, "color:inherit;", data);
+    }
+
+    dispatchBackgroundLog(payload) {
+        // Design Intent: Centralize the dispatch to ensure lastError is always checked.
+        chrome.runtime.sendMessage(payload, () => {
+            if (chrome.runtime.lastError) { /* Background temporarily unavailable */ }
+        });
     }
 
     setDebug(enabled) {

@@ -2,17 +2,20 @@
   "manifest_version": 3,
   "name": "VitalSource Pilot Pro",
   "version": "9.3.0",
-  "description": "Autonomous PDF Engine: Removed body fallback, blocked Syncing states, decoupled CSS payloads, and batched PDF rendering.",
+  "description": "Autonomous PDF Engine: High-fidelity capture via Mimeo API and Mosaic container targeting.",
   "permissions": ["sidePanel", "tabs", "activeTab", "scripting", "storage", "unlimitedStorage", "management", "debugger", "downloads"],
   "host_permissions": [
     "*://bookshelf.vitalsource.com/*",
     "*://capella.vitalsource.com/*",
     "*://mosaic.vitalsource.com/*",
     "*://jigsaw.vitalsource.com/*",
+    "*://*.vitalsource.com/*",
     "*://*.capella.edu/*"
   ],
   "background": {
-    "service_worker": "dist/background.entry.js"
+    // Design Intent: Reference the bundled file in the distribution root.
+    // This allows the entire 'dist' folder to be loaded as the extension.
+    "service_worker": "background.entry.js"
   },
   "action": {
     "default_title": "Open Pilot Pro",
@@ -33,9 +36,13 @@
         "*://capella.vitalsource.com/*",
         "*://mosaic.vitalsource.com/*",
         "*://jigsaw.vitalsource.com/*",
+        "*://*.vitalsource.com/*",
         "*://*.capella.edu/*"
       ],
-      "js": ["dist/intercept.entry.js", "dist/content.entry.js"],
+      // Design Intent: dist/content.entry.js contains the MimeoBridge and 
+      // UI listeners. Injecting into all_frames is critical for 
+      // piercing the mosaic-book content iframes.
+      "js": ["intercept.entry.js", "content.entry.js"],
       "all_frames": true,
       "run_at": "document_start"
     },
@@ -47,8 +54,9 @@
         "*://jigsaw.vitalsource.com/*",
         "*://*.capella.edu/*"
       ],
-      "js": ["src/features/mobile/floating-menu.js"],
-      "css": ["src/features/mobile/menu.styles.css"],
+      // Design Intent: Reference the processed files now residing in dist
+      "js": ["floating-menu.js"],
+      "css": ["menu.styles.css"],
       "all_frames": false,
       "run_at": "document_idle"
     }

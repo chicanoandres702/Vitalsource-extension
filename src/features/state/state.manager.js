@@ -2,6 +2,9 @@
  * Global state management for the extension
  */
 import { logger } from '../../services/logger.service.js';
+import { statePersistence } from './state.persistence.js';
+import { internalDiscovery } from '../../internal-discovery.service.js';
+import { getContextId } from '../../services/utils.service.js';
 
 class StateManager {
     constructor() {
@@ -14,7 +17,7 @@ class StateManager {
         this.autoPilot = false;
         this.customSelector = null;
         this.autoPilotStopPage = null;
-        this.flipDelay = 1200;
+        this.flipDelay = 500;
         this.lastFlipTime = 0;
         this.isTransitioning = false;
         this.hasSnappedCurrentPage = false;
@@ -22,14 +25,10 @@ class StateManager {
         this.lastTextHash = '';
         this._lastStabilizeFP = '';
         this._stabilizeReady = false;
+        this.fixedLayout = false; // Design Intent: Track book layout for heuristic thresholds
 
-        try {
-            chrome.storage.local.get(['lastCustomSelector'], (res) => {
-                if (res.lastCustomSelector) {
-                    this.customSelector = res.lastCustomSelector;
-                }
-            });
-        } catch (e) {}
+        statePersistence.loadInitial((sel) => { this.customSelector = sel; });
+        this.discoverInternalData();
     }
 
     // Outline management
@@ -39,13 +38,16 @@ class StateManager {
 
         if (logger.debug) logger.log('DATA', `Captured TOC for Book: ${this.currentBookId}. Items: ${this.outline.length}`);
 
-        try {
-            if (this.currentBookId) {
-                const saveObj = { bookId: this.currentBookId };
-                saveObj[`outline_${this.currentBookId}`] = this.outline;
-                chrome.storage.local.set(saveObj);
-            }
-        } catch (e) {}
+        statePersistence.saveOutline(this.currentBookId, this.outline);
+    }
+
+    discoverInternalData() {
+        // Design Intent: Resolve the current Book ID from the context 
+        // before looking up internal manifest data to ensure TOC alignment.
+        const bookId = getContextId();
+        const data = internalDiscovery.getManifest(bookId);
+        if (data) this.setOutline(data.toc, data.bookId);
+        if (data?.isFixed) this.setFixedLayout(true);
     }
 
     // Pagebreaks management
@@ -55,13 +57,7 @@ class StateManager {
 
         if (logger.debug) logger.log('DATA', `Captured Pagebreaks for Book: ${this.currentBookId}. Items: ${this.pagebreaks.length}`);
 
-        try {
-            if (this.currentBookId) {
-                const saveObj = { bookId: this.currentBookId };
-                saveObj[`pagebreaks_${this.currentBookId}`] = this.pagebreaks;
-                chrome.storage.local.set(saveObj);
-            }
-        } catch (e) {}
+        statePersistence.savePagebreaks(this.currentBookId, this.pagebreaks);
     }
 
     // Session management
@@ -92,6 +88,18 @@ class StateManager {
     // Page state
     setTransitioning(isTransitioning) {
         this.isTransitioning = isTransitioning;
+        if (isTransitioning) {
+            if (this._transitionSafetyTimeout) clearTimeout(this._transitionSafetyTimeout);
+            this._transitionSafetyTimeout = setTimeout(() => {
+                if (this.isTransitioning) {
+                    logger.log('NAV', 'Transition lock safety timeout reached. Forcing release.');
+                    this.setTransitioning(false);
+                }
+            }, 8000); // 8s safety net
+        } else if (this._transitionSafetyTimeout) {
+            clearTimeout(this._transitionSafetyTimeout);
+            this._transitionSafetyTimeout = null;
+        }
     }
 
     setHasSnappedCurrentPage(hasSnapped) {
@@ -123,6 +131,13 @@ class StateManager {
         return this._stabilizeReady;
     }
 
+    getIsFixedLayout() {
+        return this.fixedLayout;
+    }
+
+    setFixedLayout(isFixed) {
+        this.fixedLayout = isFixed;
+    }
     // Getters
     getOutline() { return this.outline; }
     getPagebreaks() { return this.pagebreaks; }
@@ -133,9 +148,7 @@ class StateManager {
     getAutoPilot() { return this.autoPilot; }
     setCustomSelector(selector) {
         this.customSelector = selector;
-        try {
-            chrome.storage.local.set({ lastCustomSelector: selector });
-        } catch (e) {}
+        statePersistence.saveCustomSelector(selector);
     }
     getCustomSelector() { return this.customSelector; }
     getAutoPilotStopPage() { return this.autoPilotStopPage; }
@@ -146,6 +159,26 @@ class StateManager {
     getHasSnappedCurrentPage() { return this.hasSnappedCurrentPage; }
     getLastContentFP() { return this.lastContentFP; }
     getLastTextHash() { return this.lastTextHash; }
+
+    // Current page
+    getCurrentPage() {
+        const input = document.querySelector('input[class*="InputControl__input"]');
+        if (!input) {
+            // Fallback to searching all inputs for a numeric or roman value
+            const inputs = Array.from(document.querySelectorAll('input'));
+            for (const i of inputs) {
+                if (i.value && /^[ivx0-9]+$/i.test(i.value)) return i.value;
+            }
+        }
+        return input ? input.value : 'unknown';
+    }
+
+    // Check if at end of book
+    isAtEnd() {
+        // Check if next button is disabled or not present
+        const nextBtn = document.querySelector('button[aria-label="Next Page"], .next-button, [data-testid="next-btn"]');
+        return !nextBtn || nextBtn.disabled;
+    }
 }
 
 export const stateManager = new StateManager();

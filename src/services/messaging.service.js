@@ -3,6 +3,8 @@
  */
 import { logger } from './logger.service.js';
 import { getContextId } from './utils.service.js';
+import { findDeep } from './dom.service.js';
+import { captureMetadata } from '../features/capture/capture.metadata.js';
 
 const CONTEXT_ID = getContextId();
 const IS_TOP = window.top === window.self;
@@ -18,20 +20,36 @@ class MessagingService {
     safeSend(msg) {
         try {
             if (!chrome?.runtime?.id) return;
+            // Design Intent: Provide a callback to catch and suppress 
+            // "Receiving end does not exist" errors. Checking lastError 
+            // inside the callback prevents the "Unchecked runtime.lastError" 
+            // warning from appearing in the console.
             chrome.runtime.sendMessage(msg, () => {
-                if (chrome.runtime.lastError) { /* ignore */ }
+                const err = chrome.runtime.lastError;
+                if (err) { /* Connection failure expected during frame navigation */ }
             });
         } catch (e) { /* ignore context invalidated */ }
     }
 
     sendPulse() {
-        this.safeSend({
+        // Design Intent: Mult-layered detection for the book frame. 
+        // Check light DOM, Shadow DOM, and internal Mosaic component flags.
+        const hasBook = !!(
+            findDeep('mosaic-book, .mosaic-page, #epub-content-container', document, true) || 
+            document.querySelector('script[src*="mosaic"]') ||
+            window.Mimeo
+        );
+
+        const msg = {
             type: 'ALIVE',
             sensorId: this.sensorId,
             contextId: this.contextId,
             url: location.href,
-            timestamp: Date.now()
-        });
+            timestamp: Date.now(),
+            isBookFrame: hasBook
+        };
+        if (this.isTop) msg.pageValue = captureMetadata.getCurrentPageValue();
+        this.safeSend(msg);
     }
 
     sendData(html, styles, meta) {
@@ -65,7 +83,8 @@ class MessagingService {
     // Message listener setup
     setupMessageListener(handler) {
         chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-            logger.log('BRIDGE', `Command: ${message.action}`);
+            // Design Intent: Standardize on 'type' for all message identification
+            logger.log('BRIDGE', `Incoming: ${message.type || message.action}`);
             const isAsync = handler(message, sendResponse);
             if (isAsync === true) return true;
         });

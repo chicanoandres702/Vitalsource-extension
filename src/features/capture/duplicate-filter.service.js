@@ -5,21 +5,13 @@
 
 import { stateManager } from '../state/state.manager.js';
 import { logger } from '../../services/logger.service.js';
+import { quickHash } from '../../services/utils.service.js';
 
 export const duplicateFilterService = {
-    quickHash(str) {
-        let hash = 0;
-        for (let i = 0; i < str.length; i++) {
-            hash = ((hash << 5) - hash) + str.charCodeAt(i);
-            hash |= 0; 
-        }
-        return hash.toString(16);
-    },
-
     computeSignatures(pageId, pageText, pureTextStr, sourceText) {
         const salt = pageId + '|' + pageText;
-        const textHash = pureTextStr.length > 50 ? this.quickHash(pureTextStr) : this.quickHash(salt + '|' + sourceText);
-        const signature = this.quickHash(salt + '|' + sourceText);
+        const textHash = pureTextStr.length > 50 ? quickHash(pureTextStr) : quickHash(salt + '|' + sourceText);
+        const signature = quickHash(salt + '|' + sourceText);
         return { textHash, signature };
     },
 

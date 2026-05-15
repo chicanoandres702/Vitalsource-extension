@@ -24,33 +24,43 @@ class ObserverService {
         if (this.autoSnapObserver) { this.autoSnapObserver.disconnect(); this.autoSnapObserver = null; }
         if (this.autoSnapInterval) { clearInterval(this.autoSnapInterval); this.autoSnapInterval = null; }
 
+        // Clean up redundant frames: Only arm auto-snap in frames with significant content
+        // to prevent background/pre-loaded frames from triggering page turns.
+        if (!stateManager.getAutoPilot() && !stateManager.getIsScraping()) return;
+        if (window.top !== window.self && document.body.innerText.length < 250) {
+            return;
+        }
+
         if (!stateManager.getIsScraping()) {
             logger.log('SENSOR', 'Engine not active — auto-snap suppressed. Arming page-change observer only.');
             this.armPageChangeObserver();
             return;
         }
 
-        const existing = stateManager.getCustomSelector() ? contentDetector.findDeep(stateManager.getCustomSelector()) : contentDetector.autoDetectContent();
-        if (contentDetector.isContentValid(existing)) {
-            autoSnapFired = true;
-            logger.log('SENSOR', 'Content already present — firing snap immediately.');
-            captureService.scheduleSnap(300);
-            this.armPageChangeObserver();
-            return;
-        }
+        const checkAndSchedule = () => {
+            if (autoSnapFired) return true;
+            
+            const isTransitioning = stateManager.getIsTransitioning();
+            if (isTransitioning) return false;
+
+            const found = stateManager.getCustomSelector() ? contentDetector.findDeep(stateManager.getCustomSelector()) : contentDetector.autoDetectContent();
+            if (contentDetector.isContentValid(found)) {
+                logger.log('SENSOR', 'Valid content detected & transition finished — scheduling snap.');
+                autoSnapFired = true;
+                if (this.autoSnapObserver) { this.autoSnapObserver.disconnect(); this.autoSnapObserver = null; }
+                if (this.autoSnapInterval) { clearInterval(this.autoSnapInterval); this.autoSnapInterval = null; }
+                captureService.scheduleSnap(5000);
+                this.armPageChangeObserver();
+                return true;
+            }
+            return false;
+        };
+
+        if (checkAndSchedule()) return;
 
         try {
             this.autoSnapObserver = new MutationObserver(debounce(() => {
-                if (autoSnapFired) { this.autoSnapObserver && this.autoSnapObserver.disconnect(); return; }
-                const found = stateManager.getCustomSelector() ? contentDetector.findDeep(stateManager.getCustomSelector()) : contentDetector.autoDetectContent();
-                if (contentDetector.isContentValid(found)) {
-                    autoSnapFired = true;
-                    this.autoSnapObserver && this.autoSnapObserver.disconnect();
-                    if (this.autoSnapInterval) { clearInterval(this.autoSnapInterval); this.autoSnapInterval = null; }
-                    logger.log('SENSOR', 'Observer: content appeared — firing snap.');
-                    captureService.scheduleSnap(300);
-                    this.armPageChangeObserver();
-                }
+                checkAndSchedule();
             }, 150));
             const root = document.body || document.documentElement;
             this.autoSnapObserver.observe(root, { childList: true, subtree: true });
@@ -59,26 +69,23 @@ class ObserverService {
         }
 
         this.autoSnapInterval = setInterval(() => {
-            if (autoSnapFired) { clearInterval(this.autoSnapInterval); this.autoSnapInterval = null; return; }
-            const found = stateManager.getCustomSelector() ? contentDetector.findDeep(stateManager.getCustomSelector()) : contentDetector.autoDetectContent();
-            if (contentDetector.isContentValid(found)) {
-                autoSnapFired = true;
-                clearInterval(this.autoSnapInterval); this.autoSnapInterval = null;
-                this.autoSnapObserver && this.autoSnapObserver.disconnect();
-                logger.log('SENSOR', 'Interval fallback: content found in shadow DOM — firing snap.');
-                captureService.scheduleSnap(300);
-                this.armPageChangeObserver();
-            }
+            checkAndSchedule();
         }, 1000);
 
-        logger.log('SENSOR', 'Auto-snap armed (observer + interval fallback).');
+        logger.log('SENSOR', 'Auto-snap armed (waiting for content + transition idle).');
     }
 
     armPageChangeObserver() {
         if (this.pageChangeObserver) this.pageChangeObserver.disconnect();
 
         const checkForChange = debounce(() => {
-            if (document.hidden || stateManager.getIsTransitioning()) return;
+            if (document.hidden) return;
+
+            if (stateManager.getIsTransitioning()) {
+                logger.log('SENSOR', 'Page-change detected while locked. Deferring check 1000ms.');
+                setTimeout(checkForChange, 1000);
+                return;
+            }
 
             const content = stateManager.getCustomSelector() ? contentDetector.findDeep(stateManager.getCustomSelector()) : contentDetector.autoDetectContent();
             if (!content) return;
@@ -94,9 +101,9 @@ class ObserverService {
 
             if (fpChanged || textChanged) {
                 logger.log('SENSOR', `Change detected (FP: ${fpChanged}, Text: ${textChanged}). Queuing snap.`);
-                captureService.scheduleSnap(300); // Reduced delay for faster response
+                captureService.scheduleSnap(5000); 
             }
-        }, 800); // Reduced debounce time
+        }, 2000); 
 
         this.pageChangeObserver = new MutationObserver(checkForChange);
         this.pageChangeObserver.observe(document.body || document.documentElement, {
@@ -130,13 +137,17 @@ class ObserverService {
             }
         }, 1000);
 
-        // Watchdog for stalls
+        // Watchdog for stalls - Only run in the Top Frame.
+        // Centralizing navigation management in one place prevents "turn wars" 
+        // between competing frame observers.
+        if (window.top !== window.self) return;
+
         setInterval(() => {
             if (!stateManager.getAutoPilot() || !stateManager.getIsScraping() || document.hidden) return;
             if (Date.now() - stateManager.getLastFlipTime() > 8000) {
                 logger.log('NAV', 'WATCHDOG: Stall detected (8s). Nudge recovery.');
                 captureService.snapWithRetry(0, false);
-                setTimeout(() => navigationService.triggerNext(), 3000);
+                setTimeout(() => navigationService.nextPage(), 3000);
                 stateManager.setLastFlipTime(Date.now());
             }
         }, 3000);

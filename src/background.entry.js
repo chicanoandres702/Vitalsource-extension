@@ -1,5 +1,5 @@
 /**
- * c:\Users\Andrew\Downloads\Vitalsource-extension\src\entries\background.entry.js
+ * c:\Users\Andrew\Downloads\Vitalsource-extension\src\background.entry.js
  * Background Entry Point
  * Design Intent: Acts as the central message router and lifecycle manager.
  * Standardized suffix (.entry) for bundler recognition.

@@ -1,3 +1,38 @@
 {
-  "extends": "next"
+  "env": {
+    "browser": true,
+    "webextensions": true,
+    "es2021": true
+  },
+  "extends": "eslint:recommended",
+  "parserOptions": {
+    "ecmaVersion": 12,
+    "sourceType": "module"
+  },
+  "rules": {
+    "max-lines": ["error", { 
+      "max": 100, 
+      "skipBlankLines": true, 
+      "skipComments": true 
+    }],
+    "no-magic-numbers": ["warn", { 
+      "ignore": [0, 1, -1], 
+      "enforceConst": true,
+      "detectObjects": true
+    }],
+    "no-var": "error",
+    "prefer-const": "error",
+    "no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
+    "curly": ["error", "all"],
+    "eqeqeq": ["error", "always"]
+  },
+  "overrides": [
+    {
+      "files": ["src/features/**/*.js"],
+      "rules": {
+        "func-style": ["error", "expression"],
+        "prefer-arrow-callback": "error"
+      }
+    }
+  ]
 }
