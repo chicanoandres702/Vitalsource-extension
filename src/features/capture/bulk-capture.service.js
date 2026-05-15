@@ -3,11 +3,19 @@
  * Design Intent: Leverages the internal Mimeo print API to fetch 
  * high-fidelity page ranges directly as PDFs/URLs.
  */
-import { mimeoBridge } from './mimeo-bridge.service.js';
-import { messagingService } from '../../services/messaging.service.js';
-import { logger } from '../../services/logger.service.js';
+import mimeoBridge from './mimeo-bridge.service.js';
+import messagingService from '../../services/messaging.service.js';
+import logger from '../../services/logger.service.js';
 
 export const bulkCaptureService = {
+    /**
+     * Design Intent: Standardized entry point for the sidebar orchestrator.
+     * Prevents "init is not a function" TypeErrors during bulk initialization.
+     */
+    init() {
+        logger.log('DATA', 'Bulk Capture Service Initialized');
+    },
+
     /**
      * Downloads a range of pages using VitalSource's print engine.
      * @param {string} range - e.g., "1-10"
@@ -57,3 +65,4 @@ export const bulkCaptureService = {
         return false;
     }
 };
+export default bulkCaptureService;

@@ -2,6 +2,7 @@
  * HTML cleaning and processing service
  */
 import { findDeep } from '../../services/dom.service.js';
+import canvasCleaner from './canvas-cleaner.js';
 
 const UNWANTED_SELECTORS = [
     '.pbk-page-header', '.vst-navigation-header', '.epub-running-head',
@@ -12,6 +13,13 @@ const UNWANTED_SELECTORS = [
 ];
 
 class HtmlCleaner {
+    /**
+     * Design Intent: Placeholder init method to prevent TypeError
+     * if calling modules expect a service to have an initialization function.
+     */
+    init() {
+        // No specific initialization logic required for HtmlCleaner at this time.
+    }
     getAbsoluteStyles() {
         let out = '';
         document.querySelectorAll('link[rel="stylesheet"], style').forEach(el => {
@@ -63,28 +71,7 @@ class HtmlCleaner {
                 // Iframe extraction blocked by CORS. Leaving native frame.
             }
         }
-        const originalCanvases = node.tagName === 'CANVAS' ? [node] : Array.from(node.querySelectorAll('canvas'));
-        const clonedCanvases = wrapper.tagName === 'CANVAS' ? [wrapper] : Array.from(wrapper.querySelectorAll('canvas'));
-        for (let i = 0; i < originalCanvases.length; i++) {
-            if (originalCanvases[i].width < 50 || originalCanvases[i].height < 50) {
-                clonedCanvases[i].remove();
-                continue;
-            }
-            try {
-                const dataUrl = originalCanvases[i].toDataURL('image/png');
-                if (dataUrl.length < 3500) {
-                    clonedCanvases[i].remove();
-                    continue;
-                }
-                const img = document.createElement('img');
-                img.src = dataUrl;
-                img.className = clonedCanvases[i].className;
-                img.style.cssText = clonedCanvases[i].style.cssText;
-                clonedCanvases[i].replaceWith(img);
-            } catch (e) {
-                // Canvas CORS taint - cannot export to image
-            }
-        }
+        canvasCleaner.convertCanvases(node, wrapper);
         ['__hrp__', '.vstskip', '.vst-ignore', 'script', 'button', 'template',
          '.sc-czWrlN', '.Tooltip__tooltip', '.sr-only', '.visually-hidden',
          '.assistive-text', '[aria-hidden="true"]', '[role="tooltip"]'].forEach(sel => {
@@ -118,4 +105,4 @@ class HtmlCleaner {
     }
 }
 
-export const htmlCleaner = new HtmlCleaner();
+export default new HtmlCleaner();

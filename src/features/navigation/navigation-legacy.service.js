@@ -1,9 +1,18 @@
+
 /**
  * navigation-legacy.service.js
  * Intent: Resolve "S.navigateToPage is not a function" via centralized tab messaging.
  */
 
-export const NavigationService = {
+const NavigationService = {
+  /**
+   * Standardized entry point for the sidebar orchestrator.
+   * Prevents "init is not a function" TypeErrors during boot.
+   */
+  init() {
+    // No internal state to initialize for legacy navigation
+  },
+
   /**
    * Communicates with content script to trigger a page jump.
    * @param {number|string} pageNumber 
@@ -22,5 +31,4 @@ export const NavigationService = {
   }
 };
 
-// Alias to 'S' if needed for legacy compatibility in bundled files
-export const S = NavigationService;
+export default NavigationService;

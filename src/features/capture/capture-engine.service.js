@@ -1,17 +1,26 @@
+
 /**
  * Capture Engine Service
  * Design Intent: Pure execution of content extraction, deduplication, and transmission.
  */
-import { stateManager } from '../state/state.manager.js';
-import { messagingService } from '../../services/messaging.service.js';
-import { contentDetector } from './content.detector.js';
-import { htmlCleaner } from './html.cleaner.js';
-import { uiService } from '../ui/ui.service.js';
-import { captureMetadata } from './capture.metadata.js';
-import { duplicateFilterService } from './duplicate-filter.service.js';
+import stateManager from '../state/state.manager.js';
+import messagingService from '../../services/messaging.service.js';
+import contentDetector from './content.detector.js';
+import htmlCleaner from './html.cleaner.js';
+import uiService from '../ui/ui.service.js';
+import captureMetadata from './capture.metadata.js';
+import duplicateFilterService from './duplicate-filter.service.js';
 import { isExtensionAlive } from '../../services/utils.service.js';
 
 export const captureEngine = {
+    /**
+     * Design Intent: Standardized entry point for the sidebar orchestrator.
+     * Prevents "init is not a function" TypeErrors.
+     */
+    init() {
+        logger.log('DATA', 'Capture Engine Active');
+    },
+
     /**
      * Performs the technical capture of a detected content target.
      * @param {Element} target 
@@ -50,3 +59,4 @@ export const captureEngine = {
         return true;
     }
 };
+export default captureEngine;

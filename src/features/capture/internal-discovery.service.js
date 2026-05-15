@@ -1,10 +1,11 @@
 /**
  * c:\Users\Andrew\Downloads\Vitalsource-extension\src\features\capture\internal-discovery.service.js
+ *
  * Internal Discovery Service
  * Design Intent: Extract high-fidelity metadata and manifest data from 
  * VitalSource's internal state (Mimeo API and localStorage cache).
  */
-import { findDeep } from '../../services/dom.service.js';
+import { findDeep } from '../../services/dom.service.js'; // This is a named export, keep as is
 
 export const internalDiscovery = {
     /**
@@ -46,3 +47,4 @@ export const internalDiscovery = {
                window.location.host.includes('jigsaw.vitalsource.com');
     }
 };
+export default internalDiscovery;

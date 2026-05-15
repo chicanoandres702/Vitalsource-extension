@@ -3,7 +3,7 @@
  * Handles queuing and orchestrating chapter sweeps based on user selection.
  */
 
-import { chapterTreeService } from '../ui/chapter-tree.service.js';
+import chapterTreeService from '../ui/chapter-tree.service.js';
 
 let ripQueue = [];
 let currentRipIndex = -1;
@@ -141,3 +141,4 @@ export const manifestRipService = {
         return false;
     }
 };
+export default manifestRipService;

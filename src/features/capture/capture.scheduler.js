@@ -2,7 +2,7 @@
  * Automated snap scheduling service with extension lifecycle awareness.
  */
 import { isExtensionAlive } from '../../services/utils.service.js';
-import { stateManager } from '../state/state.manager.js';
+import stateManager from '../state/state.manager.js';
 
 export class CaptureScheduler {
     constructor(snapCallback) {

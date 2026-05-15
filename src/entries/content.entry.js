@@ -4,14 +4,20 @@
  */
 
 // Import all services
-import { logger } from '../services/logger.service.js';
-import { messagingService } from '../services/messaging.service.js';
-import { stateManager } from '../features/state/state.manager.js';
-import { contentDetector } from '../features/capture/content.detector.js';
-import { captureService } from '../features/capture/capture.service.js';
-import { navigationService } from '../features/navigation/turner.service.js';
-import { observerService } from '../features/observers/observer.service.js';
-import { uiService } from '../features/ui/ui.service.js';
+import logger from '../services/logger.service.js';
+import messagingService from '../services/messaging.service.js';
+import stateManager from '../features/state/state.manager.js';
+import contentDetector from '../features/capture/content.detector.js';
+import captureService from '../features/capture/capture.service.js';
+import navigationService from '../features/navigation/turner.service.js';
+import observerService from '../features/observers/observer.service.js';
+import uiService from '../features/ui/ui.service.js';
+import { coordinatorService } from '../features/orchestration/coordinator.service.js';
+
+// Suppress uncaught promise rejections
+window.addEventListener('unhandledrejection', (event) => {
+    event.preventDefault();
+});
 
 // Initialize DEBUG mode
 const DEBUG = false;
@@ -38,6 +44,9 @@ function handleCommand(message, sendResponse) {
             if (message.state) {
                 stateManager.clearSessionHashes();
                 captureService.scheduleSnap(500);
+                coordinatorService.startAutomation();
+            } else {
+                coordinatorService.stopAutomation();
             }
             break;
         case 'SET_SPEED':
@@ -45,6 +54,22 @@ function handleCommand(message, sendResponse) {
             break;
         case 'PICK':
             uiService.activatePicker();
+            break;
+        case 'AUTOPICK':
+            const target = contentDetector.autoDetectContent();
+            if (target) {
+                let selector = target.tagName.toLowerCase();
+                if (target.id) {
+                    selector = '#' + target.id;
+                } else if (target.className) {
+                    selector += '.' + target.className.trim().split(/\s+/).join('.');
+                }
+                stateManager.setCustomSelector(selector);
+                logger.log('DATA', 'Auto-picked selector:', selector);
+                uiService.showVisualConfirmation('Content auto-picked');
+            } else {
+                uiService.showVisualConfirmation('No content found to auto-pick');
+            }
             break;
         case 'SNAP':
             captureService.snapWithRetry(0, true);
@@ -61,8 +86,14 @@ function handleCommand(message, sendResponse) {
             break;
         case 'PAGE_ACK':
             stateManager.setHasSnappedCurrentPage(false);
-            if (stateManager.getAutoPilot() && stateManager.getIsScraping() && messagingService.isTop) {
-                setTimeout(() => navigationService.triggerNext(), stateManager.getFlipDelay());
+            if (stateManager.getAutoPilot() && stateManager.isScraping() && messagingService.isTop) {
+                setTimeout(async () => {
+                    try {
+                        await navigationService.triggerNext();
+                    } catch (e) {
+                        // Message port may have closed, ignore
+                    }
+                }, stateManager.getFlipDelay());
             }
             break;
     }

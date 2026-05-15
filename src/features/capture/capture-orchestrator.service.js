@@ -2,22 +2,22 @@
  * Capture Orchestrator Service
  * Design Intent: Gatekeeper logic that determines if the page is ready for a snap.
  */
-import { isExtensionAlive, quickHash } from '../../services/utils.service.js';
-import { stateManager } from '../state/state.manager.js';
-import { messagingService } from '../../services/messaging.service.js';
-import { contentDetector } from './content.detector.js';
-import { htmlCleaner } from './html.cleaner.js';
-import { navigationService } from '../navigation/turner.service.js';
-import { captureMetadata } from './capture.metadata.js';
-import { captureReadiness } from './capture.readiness.js';
-import { captureEngine } from './capture-engine.service.js';
+import { isExtensionAlive, quickHash } from '../../services/utils.service.js'; // quickHash is a named export, keep as is
+import stateManager from '../state/state.manager.js';
+import messagingService from '../../services/messaging.service.js';
+import contentDetector from './content.detector.js';
+import htmlCleaner from './html.cleaner.js';
+import navigationService from '../navigation/turner.service.js';
+import captureMetadata from './capture.metadata.js';
+import captureReadiness from './capture.readiness.js';
+import captureEngine from './capture-engine.service.js';
 
 const IS_TOP = window.top === window.self;
 
 export const captureOrchestrator = {
     isSnapping: false,
     spinnerWaitAttempts: 0,
-    maxRetries: 15,
+    maxRetries: 20,
 
     snapWithRetry(attempt = 0, force = false) {
         if (!isExtensionAlive()) return;
@@ -37,7 +37,7 @@ export const captureOrchestrator = {
         }
 
         // Readiness Check: Spinners and Loaders
-        if (!force && captureReadiness.isBusy() && this.spinnerWaitAttempts < 15) {
+        if (!force && captureReadiness.isBusy() && this.spinnerWaitAttempts < 30) {
             this.spinnerWaitAttempts++;
             setTimeout(() => this.snapWithRetry(attempt, force), 400);
             return;
@@ -80,3 +80,4 @@ export const captureOrchestrator = {
         }
     }
 };
+export default captureOrchestrator;

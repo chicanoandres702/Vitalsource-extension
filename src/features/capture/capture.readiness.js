@@ -2,7 +2,7 @@
  * Verification service for page readiness.
  * Design Intent: Consolidate UI and asset state checks to prevent blank snaps.
  */
-import { contentDetector } from './content.detector.js';
+import contentDetector from './content.detector.js';
 
 export const captureReadiness = {
     isBusy() {
@@ -53,3 +53,4 @@ export const captureReadiness = {
         return { stable: true, ready: true, snap: true };
     }
 };
+export default captureReadiness;

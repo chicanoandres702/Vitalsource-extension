@@ -1,11 +1,11 @@
-import { logger } from '../../services/logger.service.js';
-import { navigationService as turnerService } from '../navigation/turner.service.js';
-import { captureService } from '../capture/capture.service.js';
-import { stateManager } from '../state/state.manager.js';
+import logger from '../../services/logger.service.js';
+import navigationService from '../navigation/turner.service.js';
+import captureService from '../capture/capture.service.js';
+import stateManager from '../state/state.manager.js';
 import { isExtensionAlive, quickHash, delay } from '../../services/utils.service.js';
 import { captureMetadata } from '../capture/capture.metadata.js';
 import { coordinatorValidator } from './coordinator.validator.js';
-import { contentDetector } from '../capture/content.detector.js';
+import contentDetector from '../capture/content.detector.js';
 
 /**
  * CoordinatorService
@@ -21,15 +21,47 @@ class CoordinatorService {
     this.isRunning = false;
 
     // Hard minimum wait after navigation before polling starts (ms)
-    this.MIN_DECRYPT_WAIT = 5000;
+    this.MIN_DECRYPT_WAIT = 15000;
     // Interval between each poll attempt (ms)
-    this.POLL_INTERVAL = 600;
+    this.POLL_INTERVAL = 400;
     // How many consecutive identical reads counts as "stable"
     this.STABLE_ROUNDS = 3;
-    // Give up after this many polls (~90 s total at 600 ms)
-    this.MAX_POLLS = 150;
+    // Give up after this many polls (~80 s total at 400 ms)
+    this.MAX_POLLS = 200;
 
     this.lastCaptureHash = '';
+  }
+
+  init(sendCommand, flipDelay) {
+    this.sendCommand = sendCommand;
+    this.flipDelay = flipDelay;
+  }
+
+  setDelay(delay) {
+    this.flipDelay = delay;
+  }
+
+  handleSpinnerStatus(visible) {
+    // Update spinner visibility state if needed
+    this.spinnerVisible = visible;
+  }
+
+  handleContentReady() {
+    // Signal that content is ready, possibly trigger next action
+  }
+
+  handleCaptureData(data) {
+    // Handle capture data - this might integrate with captureService
+    logger.log('NAV', 'Coordinator handling capture data:', data.meta);
+  }
+
+  abort() {
+    this.stopAutomation();
+  }
+
+  triggerTurn() {
+    // Trigger the next turn in the process
+    this.advance();
   }
 
   // ─── Public API ─────────────────────────────────────────────────────────────
@@ -38,7 +70,7 @@ class CoordinatorService {
     if (this.isRunning) return;
     this.isRunning = true;
     this.lastCaptureHash = '';
-    logger.info('Automation started.');
+    logger.log('NAV', 'Automation started.');
     try {
       await this.runLoop();
     } catch (err) {
@@ -54,7 +86,7 @@ class CoordinatorService {
     if (isExtensionAlive()) {
         chrome.runtime.sendMessage({ type: 'STATUS_UPDATE', message: 'Standby' }).catch(() => {});
     }
-    logger.info('Automation stopped.');
+    logger.log('NAV', 'Automation stopped.');
   }
 
   // ─── Main loop ───────────────────────────────────────────────────────────────
@@ -112,7 +144,7 @@ class CoordinatorService {
       if (text === lastSeen) {
         stableRounds++;
         if (stableRounds >= this.STABLE_ROUNDS) {
-          logger.info(`Page ${page}: content stable after ${attempt + 1} polls.`);
+          logger.log('NAV', `Page ${page}: content stable after ${attempt + 1} polls.`);
           return text;
         }
       } else {
@@ -128,7 +160,7 @@ class CoordinatorService {
   }
 
   async advance() {
-    const moved = await turnerService.nextPage();
+    const moved = await navigationService.nextPage();
     if (!moved) {
       logger.error('Turner failed to advance.');
       this.stopAutomation();
@@ -137,8 +169,12 @@ class CoordinatorService {
   }
 
   broadcastStatus(message, progress) {
-    chrome.runtime.sendMessage({ type: 'STATUS_UPDATE', message }).catch(() => {});
-    chrome.runtime.sendMessage({ type: 'PROGRESS_UPDATE', progress }).catch(() => {});
+    chrome.runtime.sendMessage({ type: 'STATUS_UPDATE', message }, () => {
+      if (chrome.runtime.lastError) {}
+    });
+    chrome.runtime.sendMessage({ type: 'PROGRESS_UPDATE', progress }, () => {
+      if (chrome.runtime.lastError) {}
+    });
   }
 }
 

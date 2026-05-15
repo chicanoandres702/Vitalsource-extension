@@ -1,7 +1,8 @@
-import { logger } from '../../services/logger.service.js';
-import { stateManager } from '../state/state.manager.js';
+import logger from '../../services/logger.service.js';
+import stateManager from '../state/state.manager.js';
 import { isExtensionAlive } from '../../services/utils.service.js';
-import { captureMetadata } from '../capture/capture.metadata.js';
+import captureMetadata from '../capture/capture.metadata.js';
+import { KEY_CODES, TIMEOUTS } from './navigation.constants.js';
 
 /**
  * TurnerService handles the actual DOM interactions for page turning.
@@ -15,15 +16,26 @@ class TurnerService {
   }
 
   /**
+   * Design Intent: Standardized entry point for the sidebar orchestrator.
+   * Prevents "init is not a function" TypeErrors.
+   */
+  init() {
+      logger.log('NAV', 'Turner Service Active');
+  }
+
+  /**
    * Simulates a keyboard keydown event.
    * @param {string} key - The key to simulate (e.g., 'ArrowRight', 'ArrowLeft').
    */
   simulateKeydown(key) {
+    const isRight = key === 'ArrowRight';
+    const code = isRight ? KEY_CODES.ARROW_RIGHT : (key === 'ArrowLeft' ? KEY_CODES.ARROW_LEFT : KEY_CODES.DEFAULT);
+
     const event = new KeyboardEvent('keydown', {
       key: key,
       code: key,
-      keyCode: key === 'ArrowRight' ? 39 : (key === 'ArrowLeft' ? 37 : 0), // Deprecated but some systems might still use it
-      which: key === 'ArrowRight' ? 39 : (key === 'ArrowLeft' ? 37 : 0), // Deprecated but some systems might still use it
+      keyCode: code,
+      which: code,
       bubbles: true,
       cancelable: true,
       composed: true
@@ -49,8 +61,8 @@ class TurnerService {
    */
   async requestGlobalNavigation(direction) {
     const key = direction === 'next' ? 'ArrowRight' : 'ArrowLeft';
-    const code = direction === 'next' ? 39 : 37;
-    
+    const code = direction === 'next' ? KEY_CODES.ARROW_RIGHT : KEY_CODES.ARROW_LEFT;
+
     return new Promise((resolve, reject) => {
       chrome.runtime.sendMessage({ 
         type: 'REQUEST_NAVIGATION', 
@@ -89,7 +101,7 @@ class TurnerService {
       // This bypasses CORS issues when the content script is in an iframe 
       // and the buttons are in the top-level shell.
       await this.requestGlobalNavigation(direction);
-      const success = await this.waitForPageChange(previousPageText, 8000);
+      const success = await this.waitForPageChange(previousPageText, TIMEOUTS.PAGE_CHANGE_MAX);
 
       return success;
     } finally {
@@ -97,21 +109,28 @@ class TurnerService {
     }
   }
 
-  async waitForPageChange(oldValue, timeout = 3000) {
+  async waitForPageChange(oldValue, timeout = TIMEOUTS.PAGE_CHANGE_DEFAULT) {
     const start = Date.now();
     while (Date.now() - start < timeout) {
       const newValue = captureMetadata.getCurrentPageValue();
       if (newValue !== oldValue) return true;
-      await new Promise(r => setTimeout(r, 100));
+      await new Promise(r => setTimeout(r, TIMEOUTS.POLL_INTERVAL));
     }
     return false; // Timeout reached, but maybe it worked anyway
+  }
+
+  async navigateToPage(message) {
+    // Handle JUMP command - navigate to specific page/chapter
+    // For now, log and do nothing as specific page navigation may not be implemented
+    logger.log('NAV', 'navigateToPage called with:', message);
+    // TODO: Implement specific page navigation if needed
+  }
+
+  async triggerNext() {
+    // Trigger the next page turn
+    return this.nextPage();
   }
 }
 
 const serviceInstance = new TurnerService();
-
-// Export as navigationService for capture/observer services
-export const navigationService = serviceInstance;
-
-// Export as turnerService for coordinator service
-export const turnerService = serviceInstance;
+export default serviceInstance;

@@ -2,7 +2,7 @@
  * Visual and state heuristics for content identification.
  * Design Intent: Isolate low-level DOM inspection to keep the detector modular.
  */
-import { logger } from '../../services/logger.service.js';
+import logger from '../../services/logger.service.js';
 
 export const contentHeuristics = {
     isBusy(el) {
@@ -50,3 +50,4 @@ export const contentHeuristics = {
         return false;
     }
 };
+export default contentHeuristics;

@@ -40,7 +40,18 @@ document.getElementById('print-btn').addEventListener('click', () => {
 const log = (step, msg) => console.log(`[PilotPro] ${step}: ${msg}`);
 
 // Fetch the print data from local storage
+let loaded = false;
+setTimeout(() => {
+    if (!loaded) {
+        console.log('[Print] Storage timeout');
+        const progress = document.getElementById('progress');
+        if (progress) progress.textContent = 'Error: Extension context lost. Please reload the extension.';
+    }
+}, 3000);
+
 chrome.storage.local.get(['printDataCache'], (result) => {
+    loaded = true;
+    console.log('[Print] Storage result:', result);
     const data = result.printDataCache;
     const progress = document.getElementById('progress');
     const container = document.getElementById('page-container');
@@ -49,6 +60,7 @@ chrome.storage.local.get(['printDataCache'], (result) => {
     const eraseNotice = document.getElementById('erase-notice');
 
     if (!data || !data.validPages || data.validPages.length === 0) {
+        console.log('[Print] No data or empty pages:', data);
         if (progress) progress.textContent = 'Error: No valid pages found.';
         if (container) {
             container.innerHTML = `<div style="text-align:center; padding: 100px 20px;">
@@ -201,6 +213,7 @@ chrome.storage.local.get(['printDataCache'], (result) => {
 
     function renderBatch() {
         if (!container) return;
+        console.log('[Print] Rendering batch:', index, 'to', Math.min(index + BATCH_SIZE, total));
 
         const end = Math.min(index + BATCH_SIZE, total);
         for (let i = index; i < end; i++) {
@@ -332,6 +345,7 @@ chrome.storage.local.get(['printDataCache'], (result) => {
             // Yield to the browser between batches so it can paint
             setTimeout(renderBatch, 50);
         } else {
+            console.log('[Print] Rendering complete');
             if (printBtn) {
                 printBtn.textContent = 'View PDF';
                 printBtn.disabled = false;
@@ -340,7 +354,7 @@ chrome.storage.local.get(['printDataCache'], (result) => {
                 aiBtn.disabled = false;
             }
             if (progress) progress.textContent = `${total} pages ready`;
-            
+
             // Clean up storage to free memory
             chrome.storage.local.remove('printDataCache');
         }

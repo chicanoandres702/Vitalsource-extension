@@ -1,14 +1,7 @@
 /**
  * Isolates chrome storage interactions for the StateManager.
  */
-export const statePersistence = {
-    saveOutline(bookId, outline) {
-        if (!bookId) return;
-        const saveObj = { bookId };
-        saveObj[`outline_${bookId}`] = outline;
-        chrome.storage.local.set(saveObj).catch(() => {});
-    },
-
+const statePersistence = {
     savePagebreaks(bookId, pagebreaks) {
         if (!bookId) return;
         const saveObj = { bookId };
@@ -28,3 +21,4 @@ export const statePersistence = {
         } catch (e) {}
     }
 };
+export default statePersistence;

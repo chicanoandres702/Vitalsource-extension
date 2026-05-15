@@ -3,17 +3,25 @@
  * Design Intent: Orchestrates the search for content across the viewport
  * and iframes while complying with the 100-line modularity law.
  */
-import { findDeep, getLargeElements, getIframeMediaSource } from '../../services/dom.service.js';
-import { logger } from '../../services/logger.service.js';
+import { findDeep, getLargeElements, getIframeMediaSource } from '../../services/dom.service.js'; // These are named exports, keep as is
+import logger from '../../services/logger.service.js';
 import { contentHeuristics } from './content.heuristics.js';
 import { contentValidator } from './content.validator.js';
 import { CONTENT_SELECTORS } from './content.constants.js';
-import { stateManager } from '../state/state.manager.js';
+import stateManager from '../state/state.manager.js';
 
 class ContentDetector {
     constructor() {
         this.sliderCache = null;
         this.sliderCacheTs = 0;
+    }
+
+    /**
+     * Design Intent: Standardized entry point for the sidebar orchestrator.
+     * Prevents "init is not a function" TypeErrors.
+     */
+    init() {
+        logger.log('SENSOR', 'Content Detector Active');
     }
 
     getSlider() {
@@ -57,7 +65,21 @@ class ContentDetector {
         for (const el of bigElements) {
             if (this.isContentValid(el)) return el;
         }
-        if (force) logger.log('DATA', 'Force mode: extended search exhausted. Returning null — will retry.');
+
+        // Smart fallback: find the <section> with the most text content
+        const sections = document.querySelectorAll('section[role="region"], section.sect2, section[epub\\:type], section');
+        let bestSection = null;
+        let maxText = 0;
+        for (const sec of sections) {
+            const textLen = (sec.innerText || '').length;
+            if (textLen > maxText && textLen > 200) {
+                maxText = textLen;
+                bestSection = sec;
+            }
+        }
+        if (bestSection && this.isContentValid(bestSection)) return bestSection;
+
+        // if (force) logger.log('DATA', 'Force mode: extended search exhausted. Returning null — will retry.');
         return null;
     }
 
@@ -104,4 +126,4 @@ class ContentDetector {
     }
 }
 
-export const contentDetector = new ContentDetector();
+export default new ContentDetector();

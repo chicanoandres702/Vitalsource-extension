@@ -38,3 +38,4 @@ export const cfiSanitizer = {
         return clean;
     }
 };
+export default cfiSanitizer;

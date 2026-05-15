@@ -3,9 +3,9 @@
  * Design Intent: Isolate heuristic evaluation to keep the detector clean 
  * and ensure rules for different layout types (Fixed vs Reflowable) are distinct.
  */
-import { contentHeuristics } from './content.heuristics.js';
-import { stateManager } from '../state/state.manager.js';
-import { logger } from '../../services/logger.service.js';
+import contentHeuristics from './content.heuristics.js';
+import stateManager from '../state/state.manager.js';
+import logger from '../../services/logger.service.js';
 import { hasValidIframeContent } from '../../services/dom.service.js';
 import { JUNK_PHRASES, UNWANTED_SELECTORS } from './content.constants.js';
 
@@ -82,3 +82,4 @@ export const contentValidator = {
         return false;
     }
 };
+export default contentValidator;

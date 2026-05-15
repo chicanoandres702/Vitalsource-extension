@@ -1,10 +1,11 @@
 /**
  * Messaging service for communication with background script
  */
-import { logger } from './logger.service.js';
+import logger from './logger.service.js';
 import { getContextId } from './utils.service.js';
-import { findDeep } from './dom.service.js';
-import { captureMetadata } from '../features/capture/capture.metadata.js';
+import { findDeep } from './dom.service.js'; // This is a named export, keep as is
+import mimeoBridge from '../features/capture/mimeo-bridge.service.js';
+import captureMetadata from '../features/capture/capture.metadata.js';
 
 const CONTEXT_ID = getContextId();
 const IS_TOP = window.top === window.self;
@@ -37,7 +38,7 @@ class MessagingService {
         const hasBook = !!(
             findDeep('mosaic-book, .mosaic-page, #epub-content-container', document, true) || 
             document.querySelector('script[src*="mosaic"]') ||
-            window.Mimeo
+            mimeoBridge.checkMimeoAvailability() // Use the bridge to check main world Mimeo
         );
 
         const msg = {
@@ -91,4 +92,4 @@ class MessagingService {
     }
 }
 
-export const messagingService = new MessagingService();
+export default new MessagingService();

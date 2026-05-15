@@ -1,8 +1,8 @@
 /**
  * Metadata extraction service for book capture.
  */
-import { contentDetector } from './content.detector.js';
-import { stateManager } from '../state/state.manager.js';
+import contentDetector from './content.detector.js';
+import stateManager from '../state/state.manager.js';
 import { findDeep } from '../../services/dom.service.js';
 
 const IS_TOP = window.top === window.self;
@@ -104,3 +104,4 @@ export const captureMetadata = {
         return chapter;
     }
 };
+export default captureMetadata;

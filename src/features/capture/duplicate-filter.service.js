@@ -3,14 +3,18 @@
  * Handles Level 1 (Fingerprint sequence) and Level 2 (Session History) deduplication.
  */
 
-import { stateManager } from '../state/state.manager.js';
-import { logger } from '../../services/logger.service.js';
+import stateManager from '../state/state.manager.js';
+import logger from '../../services/logger.service.js';
 import { quickHash } from '../../services/utils.service.js';
+import { DEDUPE_THRESHOLDS } from './capture.constants.js';
 
 export const duplicateFilterService = {
     computeSignatures(pageId, pageText, pureTextStr, sourceText) {
         const salt = pageId + '|' + pageText;
-        const textHash = pureTextStr.length > 50 ? quickHash(pureTextStr) : quickHash(salt + '|' + sourceText);
+        
+        const isLongEnough = pureTextStr.length > DEDUPE_THRESHOLDS.MIN_TEXT_LENGTH_FOR_HASH;
+        const textHash = isLongEnough ? quickHash(pureTextStr) : quickHash(salt + '|' + sourceText);
+        
         const signature = quickHash(salt + '|' + sourceText);
         return { textHash, signature };
     },
@@ -37,3 +41,4 @@ export const duplicateFilterService = {
         stateManager.setLastTextHash(textHash);
     }
 };
+export default duplicateFilterService;

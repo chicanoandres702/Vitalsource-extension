@@ -21,7 +21,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         
         navigationBackground.handleNavigationRequest(tabId, message.keyCode)
             .then(status => sendResponse({ status }))
-            .catch(err => sendResponse({ status: 'error', error: err.message }));
+            .catch(err => sendResponse({ status: 'error', error: err.message })); // Design Intent: Respond with error status on failure.
         return true; // Maintain channel for async response
     }
 
@@ -40,30 +40,29 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                         console.log('[PilotPro] Picker signal received in frame.');
                     }
                 }).catch(() => {
-                    // Design Intent: Suppress port closure errors by providing 
-                    // an empty callback for the fallback message.
-                    chrome.tabs.sendMessage(targetId, { type: 'START_PICKER' }, () => {
-                        if (chrome.runtime.lastError) { /* Expected if frame is dead */ }
-                    });
+                    // Design Intent: Fallback to top-frame only if scripting is restricted, suppressing console errors for non-existent frames.
+                    chrome.tabs.sendMessage(targetId, { type: 'START_PICKER' }).catch(() => {});
                 });
             }
         });
-        sendResponse({ status: 'picker_activated' });
         return false;
     }
 
     if (type === 'PICKER_COMPLETE') {
         // Design Intent: Broadcast the new selector to the Sidebar AND all active frames.
         // This ensures that whichever frame captures the next page uses the user-defined target.
-        // Use a safeSend-like pattern to suppress console noise from closed ports.
+        // Use a safeSend-like pattern to suppress console noise from closed ports. 
+        // The response is sent immediately, so we indicate a synchronous response.
         const sendSafe = (msg, tabId = null) => {
             if (tabId) {
                 chrome.tabs.sendMessage(tabId, msg, () => {
-                    if (chrome.runtime.lastError) { /* Frame might be closed */ }
+                    // Design Intent: Suppress "Receiving end does not exist" for frames that might have closed.
+                    if (chrome.runtime.lastError) { /* Frame might be closed */ } 
                 });
             } else {
                 chrome.runtime.sendMessage(msg, () => {
-                    if (chrome.runtime.lastError) { /* Sidebar might be closed */ }
+                    // Design Intent: Suppress "Receiving end does not exist" for sidebar that might have closed.
+                    if (chrome.runtime.lastError) { /* Sidebar might be closed */ } 
                 });
             }
         };
@@ -71,11 +70,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendSafe(message); // Send to sidebar
         chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
             if (tabs[0]?.id) {
-                sendSafe({ type: 'SYNC_SELECTOR', payload: message.payload }, tabs[0].id); // Send to content scripts
+                sendSafe({ type: 'SYNC_SELECTOR', payload: message.payload }, tabs[0].id); // Design Intent: Send to content scripts.
             }
         });
-        sendResponse({ status: 'broadcast_complete' });
-        return false;
+        sendResponse({ status: 'synced' });
+        return true; // Design Intent: Signal an async response, as sendResponse is called.
     }
 
     if (type === 'RESET_SELECTOR') {
@@ -87,7 +86,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 });
             }
         });
-        sendResponse({ status: 'reset_complete' });
+        sendResponse({ status: 'reset' });
         return false;
     }
 
@@ -98,28 +97,32 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const origin = new URL(sender.url).hostname || 'top';
         console.debug(`[Pulse] ${origin} | Book: ${!!message.isBookFrame} | Pg: ${message.pageValue || 'N/A'}`);
 
-        if (!message.pageValue) return false;
+        if (!message.pageValue) {
+            sendResponse({ ack: true });
+            return false;
+        }
 
-        // Design Intent: Broadcast the page number from the Top frame to 
-        // all content iframes to bypass CORS state blindness.
         chrome.tabs.sendMessage(sender.tab.id, { 
             type: 'STATE_SYNC', 
             payload: { currentPage: message.pageValue } 
         }, () => {
             if (chrome.runtime.lastError) { /* Frame might have been closed */ }
         });
-        return false;
+        sendResponse({ ack: true });
+        return true; // Design Intent: Signal an async response, as sendResponse is called.
     }
 
     if (type === 'LOG_EVENT') {
         // Design Intent: Centralize logging for debugging production bundles
         console.log(`[Bkg-Log] ${message.category}: ${message.message}`, message.data || '');
+        sendResponse({ logged: true });
         return false;
     }
 
     if (type === 'DOWNLOAD_RESOURCE') {
         const { url, token, filename } = message.payload;
         downloadBackground.downloadWithProgress(url, token, filename);
+        sendResponse({ status: 'downloading' });
         return false;
     }
     return false; 

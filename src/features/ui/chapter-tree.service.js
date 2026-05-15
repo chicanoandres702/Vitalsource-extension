@@ -2,6 +2,7 @@
  * Chapter Tree UI Component
  * Renders the TOC table of contents, checkbox selection, and expansion states.
  */
+import { debounce } from '../../services/utils.service.js';
 
 let bookOutline = [];
 let groupedChapters = [];
@@ -17,10 +18,10 @@ export const chapterTreeService = {
     },
 
     setupListeners() {
-        this.ui.chapterSearch.oninput = () => {
+        this.ui.chapterSearch.oninput = debounce(() => {
             chapterSearchTerm = this.ui.chapterSearch.value;
             this.renderChapterList();
-        };
+        }, 300);
 
         this.ui.btnSelAll.onclick = () => {
             groupedChapters.forEach(rootNode => {
@@ -86,7 +87,7 @@ export const chapterTreeService = {
     },
 
     renderChapterList() {
-        this.ui.chapterList.innerHTML = '';
+        const fragment = document.createDocumentFragment();
         const renderNode = (node, depth) => {
             const hasChildren = node.children.length > 0;
             const isExpanded  = expandedChapters.has(node.id);
@@ -164,8 +165,10 @@ export const chapterTreeService = {
 
         groupedChapters.forEach(rootNode => {
             const el = renderNode(rootNode, 0);
-            if (el) this.ui.chapterList.appendChild(el);
+            if (el) fragment.appendChild(el);
         });
+        this.ui.chapterList.innerHTML = '';
+        this.ui.chapterList.appendChild(fragment);
         
         this.updateSelectionState(false);
     },
@@ -175,3 +178,4 @@ export const chapterTreeService = {
         if (refreshList) this.renderChapterList();
     }
 };
+export default chapterTreeService;

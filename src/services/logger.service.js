@@ -45,4 +45,4 @@ class Logger {
     }
 }
 
-export const logger = new Logger(false);
+export default new Logger(false);

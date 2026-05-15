@@ -1,15 +1,13 @@
 /**
  * Global state management for the extension
  */
-import { logger } from '../../services/logger.service.js';
-import { statePersistence } from './state.persistence.js';
-import { internalDiscovery } from '../../internal-discovery.service.js';
+import logger from '../../services/logger.service.js';
+import statePersistence from './state.persistence.js'; // Assuming this is correct
 import { getContextId } from '../../services/utils.service.js';
-
+import manifestState from './manifest.state.js';
+import stabilizationState from './stabilization.state.js';
 class StateManager {
     constructor() {
-        this.outline = [];
-        this.pagebreaks = [];
         this.currentBookId = null;
         this.sessionHashes = new Set();
         this.capturedPageCount = 0;
@@ -21,43 +19,22 @@ class StateManager {
         this.lastFlipTime = 0;
         this.isTransitioning = false;
         this.hasSnappedCurrentPage = false;
-        this.lastContentFP = '';
-        this.lastTextHash = '';
-        this._lastStabilizeFP = '';
-        this._stabilizeReady = false;
         this.fixedLayout = false; // Design Intent: Track book layout for heuristic thresholds
 
         statePersistence.loadInitial((sel) => { this.customSelector = sel; });
-        this.discoverInternalData();
     }
 
-    // Outline management
-    setOutline(data, bookId) {
-        this.outline = data;
-        this.currentBookId = bookId || this.currentBookId;
-
-        if (logger.debug) logger.log('DATA', `Captured TOC for Book: ${this.currentBookId}. Items: ${this.outline.length}`);
-
-        statePersistence.saveOutline(this.currentBookId, this.outline);
+    /**
+     * Design Intent: Standardized entry point for the sidebar orchestrator.
+     * Prevents "init is not a function" TypeErrors.
+     */
+    init() {
+        this.discoverInternalData();
+        logger.log('BRIDGE', 'State Manager Initialized');
     }
 
     discoverInternalData() {
-        // Design Intent: Resolve the current Book ID from the context 
-        // before looking up internal manifest data to ensure TOC alignment.
-        const bookId = getContextId();
-        const data = internalDiscovery.getManifest(bookId);
-        if (data) this.setOutline(data.toc, data.bookId);
-        if (data?.isFixed) this.setFixedLayout(true);
-    }
-
-    // Pagebreaks management
-    setPagebreaks(data, bookId) {
-        this.pagebreaks = data;
-        this.currentBookId = bookId || this.currentBookId;
-
-        if (logger.debug) logger.log('DATA', `Captured Pagebreaks for Book: ${this.currentBookId}. Items: ${this.pagebreaks.length}`);
-
-        statePersistence.savePagebreaks(this.currentBookId, this.pagebreaks);
+        manifestState.discoverInternalData((isFixed) => this.setFixedLayout(isFixed));
     }
 
     // Session management
@@ -107,29 +84,14 @@ class StateManager {
     }
 
     // Fingerprinting
-    setLastContentFP(fp) {
-        this.lastContentFP = fp;
-    }
-
-    setLastTextHash(hash) {
-        this.lastTextHash = hash;
-    }
-
-    setStabilizeFP(fp) {
-        this._lastStabilizeFP = fp;
-    }
-
-    setStabilizeReady(ready) {
-        this._stabilizeReady = ready;
-    }
-
-    getStabilizeFP() {
-        return this._lastStabilizeFP;
-    }
-
-    getStabilizeReady() {
-        return this._stabilizeReady;
-    }
+    setLastContentFP(fp) { stabilizationState.setLastContentFP(fp); }
+    getLastContentFP() { return stabilizationState.getLastContentFP(); }
+    setLastTextHash(hash) { stabilizationState.setLastTextHash(hash); }
+    getLastTextHash() { return stabilizationState.getLastTextHash(); }
+    setStabilizeFP(fp) { stabilizationState.setStabilizeFP(fp); }
+    getStabilizeFP() { return stabilizationState.getStabilizeFP(); }
+    setStabilizeReady(ready) { stabilizationState.setStabilizeReady(ready); }
+    getStabilizeReady() { return stabilizationState.getStabilizeReady(); }
 
     getIsFixedLayout() {
         return this.fixedLayout;
@@ -139,8 +101,8 @@ class StateManager {
         this.fixedLayout = isFixed;
     }
     // Getters
-    getOutline() { return this.outline; }
-    getPagebreaks() { return this.pagebreaks; }
+    getOutline() { return manifestState.getOutline(); }
+    getPagebreaks() { return manifestState.getPagebreaks(); }
     getCurrentBookId() { return this.currentBookId; }
     getCapturedPageCount() { return this.capturedPageCount; }
     incrementCapturedPageCount() { return ++this.capturedPageCount; }
@@ -157,8 +119,6 @@ class StateManager {
     setLastFlipTime(time) { this.lastFlipTime = time; }
     getIsTransitioning() { return this.isTransitioning; }
     getHasSnappedCurrentPage() { return this.hasSnappedCurrentPage; }
-    getLastContentFP() { return this.lastContentFP; }
-    getLastTextHash() { return this.lastTextHash; }
 
     // Current page
     getCurrentPage() {
@@ -181,4 +141,4 @@ class StateManager {
     }
 }
 
-export const stateManager = new StateManager();
+export default new StateManager();

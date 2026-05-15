@@ -4,7 +4,7 @@
  * to keep other services focused on their core responsibilities.
  */
 
-import { logger } from './logger.service.js';
+import logger from './logger.service.js';
 
 /**
  * Recursively searches for an element within the given root, including shadow DOMs.

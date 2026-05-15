@@ -3,7 +3,7 @@
  * Design Intent: Ensure all modular services are correctly instantiated
  * and reachable before background communication or automation begins.
  */
-import { logger } from './logger.service.js';
+import logger from './logger.service.js';
 
 export const healthService = {
     /**
@@ -27,3 +27,4 @@ export const healthService = {
         return true;
     }
 };
+export default healthService;

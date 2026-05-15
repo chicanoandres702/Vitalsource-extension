@@ -1,13 +1,14 @@
 /**
  * Observer service for DOM mutations and auto-snap functionality
  */
-import { logger } from '../../services/logger.service.js';
+import logger from '../../services/logger.service.js';
 import { debounce, quickHash } from '../../services/utils.service.js';
-import { stateManager } from '../state/state.manager.js';
-import { messagingService } from '../../services/messaging.service.js';
-import { contentDetector } from '../capture/content.detector.js';
-import { captureService } from '../capture/capture.service.js';
-import { navigationService } from '../navigation/turner.service.js';
+import stateManager from '../state/state.manager.js';
+import messagingService from '../../services/messaging.service.js';
+import contentDetector from '../capture/content.detector.js';
+import captureService from '../capture/capture.service.js';
+import navigationService from '../navigation/turner.service.js';
+import navigationWatchdog from './navigation.watchdog.js';
 
 class ObserverService {
     constructor() {
@@ -16,6 +17,12 @@ class ObserverService {
         this.pageChangeObserver = null;
         this._lastUrl = location.href;
         this._lastHash = location.hash;
+    }
+
+    init() {
+        this.setupEventListeners();
+        this.startNavigationWatchdog();
+        logger.log('SENSOR', 'Observer Service Initialized');
     }
 
     armAutoSnap() {
@@ -30,6 +37,18 @@ class ObserverService {
         if (window.top !== window.self && document.body.innerText.length < 250) {
             return;
         }
+
+        // Fallback: Force snap after 10 seconds if not fired
+        const fallbackTimeout = setTimeout(() => {
+            if (!autoSnapFired) {
+                logger.log('SENSOR', 'Auto-snap fallback timeout reached — forcing capture.');
+                autoSnapFired = true;
+                if (this.autoSnapObserver) { this.autoSnapObserver.disconnect(); this.autoSnapObserver = null; }
+                if (this.autoSnapInterval) { clearInterval(this.autoSnapInterval); this.autoSnapInterval = null; }
+                captureService.scheduleSnap(1000);
+                this.armPageChangeObserver();
+            }
+        }, 10000);
 
         if (!stateManager.getIsScraping()) {
             logger.log('SENSOR', 'Engine not active — auto-snap suppressed. Arming page-change observer only.');
@@ -47,6 +66,7 @@ class ObserverService {
             if (contentDetector.isContentValid(found)) {
                 logger.log('SENSOR', 'Valid content detected & transition finished — scheduling snap.');
                 autoSnapFired = true;
+                clearTimeout(fallbackTimeout);
                 if (this.autoSnapObserver) { this.autoSnapObserver.disconnect(); this.autoSnapObserver = null; }
                 if (this.autoSnapInterval) { clearInterval(this.autoSnapInterval); this.autoSnapInterval = null; }
                 captureService.scheduleSnap(5000);
@@ -120,14 +140,8 @@ class ObserverService {
     }
 
     startNavigationWatchdog() {
-        // Listen for arrow key navigation (often used in top window readers)
-        window.addEventListener('keydown', (e) => {
-            if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
-                logger.log('NAV', 'Arrow key navigation detected.');
-                setTimeout(() => this.onSpaNavigation(), 300);
-            }
-        });
-
+        navigationWatchdog.init(() => this.onSpaNavigation());
+        
         // Watch for URL/hash changes
         setInterval(() => {
             if (location.href !== this._lastUrl || location.hash !== this._lastHash) {
@@ -136,21 +150,6 @@ class ObserverService {
                 this.onSpaNavigation();
             }
         }, 1000);
-
-        // Watchdog for stalls - Only run in the Top Frame.
-        // Centralizing navigation management in one place prevents "turn wars" 
-        // between competing frame observers.
-        if (window.top !== window.self) return;
-
-        setInterval(() => {
-            if (!stateManager.getAutoPilot() || !stateManager.getIsScraping() || document.hidden) return;
-            if (Date.now() - stateManager.getLastFlipTime() > 8000) {
-                logger.log('NAV', 'WATCHDOG: Stall detected (8s). Nudge recovery.');
-                captureService.snapWithRetry(0, false);
-                setTimeout(() => navigationService.nextPage(), 3000);
-                stateManager.setLastFlipTime(Date.now());
-            }
-        }, 3000);
     }
 
     setupEventListeners() {
@@ -166,4 +165,4 @@ class ObserverService {
     }
 }
 
-export const observerService = new ObserverService();
+export default new ObserverService();

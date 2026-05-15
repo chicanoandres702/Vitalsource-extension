@@ -3,18 +3,22 @@
  * Design Intent: Provides a compact UI component for the sidebar to 
  * select page ranges for bulk capture.
  */
-import { bulkCaptureService } from '../capture/bulk-capture.service.js';
-import { messagingService } from '../../services/messaging.service.js';
+import bulkCaptureService from '../capture/bulk-capture.service.js';
+import messagingService from '../../services/messaging.service.js';
 
 export const rangePickerService = {
     _statusEl: null,
 
     /**
-     * Design Intent: Compatibility shim for entry points that call .init() 
-     * instead of .render(). Defaults to document.body if no container provided.
+     * Compatibility shim for bundled entry points. 
+     * Design Intent: Standardizes initialization to prevent crashes when 
+     * minifiers rename the service instance.
      */
-    init(container) {
-        this.render(container || document.body);
+    init: function(container) {
+        const target = container || document.querySelector('#settings-panel') || document.body;
+        if (target) {
+            this.render(target);
+        }
     },
 
     updateStatus(text, isError = false) {
@@ -79,3 +83,4 @@ export const rangePickerService = {
         };
     }
 };
+export default rangePickerService;

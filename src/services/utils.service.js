@@ -22,6 +22,7 @@ export function debounce(func, wait) {
 }
 
 export function pierceShadowAtPoint(x, y) {
+    if (!isFinite(x) || !isFinite(y)) return null;
     let currentElement = document.elementFromPoint(x, y);
     while (currentElement) {
         // Prioritize Shadow DOM traversal
@@ -64,12 +65,6 @@ export function getContextId() {
     }
 
     if (isbnMatch) return isbnMatch[0].toLowerCase().replace(/[^a-z0-9]/g, '');
-
-    // Fallback: Persistent Storage (Last resort if URL is obfuscated)
-    try {
-        const tocKey = Object.keys(localStorage).find(k => k.startsWith('__VS_TOC_'));
-        if (tocKey) return tocKey.split('_').pop();
-    } catch (e) {}
 
     const epubMatch = url.match(/epub\/(.*?)\//);
     return (epubMatch ? epubMatch[1] : 'vessel_global').toLowerCase().replace(/[^a-z0-9]/g, '');

@@ -1,10 +1,10 @@
 /**
  * c:\Users\Andrew\Downloads\Vitalsource-extension\src\features\capture\mimeo-bridge.service.js
+ *
  * Mimeo Bridge Service
  * Design Intent: Bridges the gap between the isolated content script world
  * and the main page world where window.Mimeo lives via DOM-event tunneling.
  */
-
 export const mimeoBridge = {
     _requestMap: new Map(),
 
@@ -58,6 +58,16 @@ export const mimeoBridge = {
         script.remove();
     },
 
+    /**
+     * Queries the main page world via the injected bridge to check if window.Mimeo is available.
+     * @returns {Promise<boolean>} True if window.Mimeo is found, false otherwise.
+     */
+    async checkMimeoAvailability() {
+        // Design Intent: Send a dummy request to the bridge to trigger the availability check.
+        // The injected script will log the status directly to the console.
+        return this.request('CHECK_MIMEO_AVAILABILITY', null).then(() => true).catch(() => false);
+    },
+
     async request(action, payload) {
         const requestId = Math.random().toString(36).substring(2, 9);
         return new Promise((resolve, reject) => {
@@ -66,3 +76,4 @@ export const mimeoBridge = {
         });
     }
 };
+export default mimeoBridge;
