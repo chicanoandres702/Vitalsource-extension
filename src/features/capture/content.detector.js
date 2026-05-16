@@ -3,12 +3,13 @@
  * Design Intent: Orchestrates the search for content across the viewport
  * and iframes while complying with the 100-line modularity law.
  */
-import { findDeep, getLargeElements, getIframeMediaSource } from '../../services/dom.service.js'; // These are named exports, keep as is
+import { findDeep, getLargeElements, getIframeMediaSource } from '../../services/dom.service.js';
 import logger from '../../services/logger.service.js';
 import { contentHeuristics } from './content.heuristics.js';
 import { contentValidator } from './content.validator.js';
 import { CONTENT_SELECTORS } from './content.constants.js';
 import stateManager from '../state/state.manager.js';
+import { isContentValidForSnap } from './strategies/validation.strategy.js';
 
 class ContentDetector {
     constructor() {
@@ -41,7 +42,8 @@ class ContentDetector {
     isContentValid(el) {
         const slider = this.getSlider();
         const sliderText = slider ? (slider.getAttribute('aria-valuetext') || '').toLowerCase() : '';
-        return contentValidator.isValid(el, sliderText);
+        return isContentValidForSnap(el, contentValidator.getPureText.bind(contentValidator)) 
+            && contentValidator.isValid(el, sliderText);
     }
 
     autoDetectContent(force = false) {

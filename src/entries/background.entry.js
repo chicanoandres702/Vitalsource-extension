@@ -71,6 +71,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return false;
     }
 
+    if (type === 'VS_OUTLINE_JSON' || type === 'VS_PAGEBREAKS_JSON') {
+        // Relay outline/pagebreak data to the sidebar so it can populate the TOC
+        chrome.runtime.sendMessage({ 
+            type: type === 'VS_OUTLINE_JSON' ? 'OUTLINE' : 'PAGEBREAKS', 
+            data: message.data 
+        }, () => {
+            if (chrome.runtime.lastError) { /* Sidebar closed */ }
+        });
+        return false;
+    }
+
     if (type === 'LOG_EVENT') {
         console.log(`[Bkg-Log] ${message.category}: ${message.message}`, message.data || '');
         return false;

@@ -1,6 +1,8 @@
 import { chapterTreeService } from '../features/ui/chapter-tree.service.js';
 import { manifestRipService } from '../features/ui/manifest-rip.service.js';
 import { coordinatorService } from '../features/orchestration/coordinator.service.js';
+import stateManager from '../features/state/state.manager.js';
+import manifestState from '../features/state/manifest.state.js';
 
 // Suppress uncaught promise rejections
 window.addEventListener('unhandledrejection', (event) => {
@@ -99,9 +101,9 @@ const setEngineState = (active) => {
     ui.statusBadge.textContent = active ? 'Autonomous' : 'Standby';
 };
 
-chapterTreeService.init(ui);
-manifestRipService.init(sendCommand, setEngineState, flipDelay);
-coordinatorService.init(sendCommand, flipDelay);
+import { initializeSidebar } from '../features/ui/sidebar.initializer.js';
+
+initializeSidebar(ui, sendCommand, setEngineState, flipDelay);
 
 // Bind UI
 ui.speedSlider.oninput = debounce(() => {
@@ -174,6 +176,8 @@ safeChrome(() => {
             }
         } else if (d.type === 'OUTLINE') {
             chapterTreeService.handleOutlineUpdate(d.data);
+        } else if (d.type === 'PAGEBREAKS') {
+            manifestState.setPagebreaks(d.data);
         } else if (d.type === 'SPINNER_STATUS') {
             coordinatorService.handleSpinnerStatus(d.visible);
         } else if (d.type === 'CONTENT_READY') {
@@ -244,3 +248,11 @@ ui.btnRecon.onclick = () => {
         }));
     }));
 };
+
+// TOC sync relay from content.js (restored from old commits)
+chrome.runtime.onMessage.addListener((message) => {
+    if (message.type === 'TOC_UPDATE' && Array.isArray(message.data)) {
+        chapterTreeService.handleOutlineUpdate(message.data);
+        console.log('[PilotPro sidebar] TOC synced via relay:', message.data.length);
+    }
+});

@@ -40,14 +40,19 @@ window.addEventListener('message', (ev) => {
 function handleCommand(message, sendResponse) {
     switch (message.action) {
         case 'ENGINE_CONFIG':
+            console.log('[Content] ENGINE_CONFIG received:', { state: message.state, initiate: message.initiate, stopPage: message.stopPage });
             stateManager.configureEngine(message);
             // Only start autonomous mode if explicitly requested by initiate button
             if (message.state && message.initiate === true) {
+                console.log('[Content] → Starting coordinator (initiate=true)');
                 stateManager.clearSessionHashes();
                 coordinatorService.startAutomation();
                 captureService.scheduleSnap(800);
             } else if (!message.state) {
+                console.log('[Content] → Stopping coordinator');
                 coordinatorService.stopAutomation();
+            } else {
+                console.log('[Content] → Skipping coordinator start (initiate not set or state is false)');
             }
             break;
         case 'SET_SPEED':
@@ -77,6 +82,34 @@ function handleCommand(message, sendResponse) {
         case 'SNAP':
             captureService.snapWithRetry(0, true);
             break;
+        case 'FETCH_TOC': {
+            // Try multiple possible VST paths for TOC
+            let toc = [];
+            try {
+                // Try the most likely paths
+                if (window.VST?.Book?.manifest?.toc) {
+                    toc = window.VST.Book.manifest.toc;
+                } else if (window.VST?.Book?.toc) {
+                    toc = window.VST.Book.toc;
+                } else if (window.VST?.toc) {
+                    toc = window.VST.toc;
+                }
+                // Ensure it's an array
+                if (!Array.isArray(toc)) toc = [];
+            } catch (e) {
+                toc = [];
+            }
+            // Normalize to our expected shape
+            const normalized = toc.map(ch => ({
+                cfi: ch.cfi || ch.id || '',
+                page: ch.page || ch.pageLabel || '',
+                title: ch.title || ch.label || '',
+                level: ch.level || 0,
+                url: ch.url || ch.path || ''
+            }));
+            sendResponse({ toc: normalized });
+            return true;
+        }
         case 'DISCOVER':
             sendPulse();
             break;

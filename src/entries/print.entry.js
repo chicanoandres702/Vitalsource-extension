@@ -120,7 +120,7 @@ chrome.storage.local.get(['printDataCache'], (result) => {
         coverPage.style.flexDirection = 'column';
         coverPage.style.justifyContent = 'center';
         coverPage.style.alignItems = 'center';
-        coverPage.style.minHeight = '1000px'; // Ensure it fills the page
+        coverPage.style.minHeight = '1000px';
         coverPage.style.padding = '80px 40px';
         
         let coverHtml = '';
@@ -144,6 +144,26 @@ chrome.storage.local.get(['printDataCache'], (result) => {
             </div>
         `;
         container.appendChild(coverPage);
+    }
+
+    // 1.5 Create Table of Contents from chapters (restored from old commits)
+    if (validPages.length > 0 && container) {
+        // Retrieve TOC from first page meta if available (old git commit style)
+        const firstToc = validPages[0]?.meta?.toc;
+        const chapters = firstToc?.data?.chapters || [...new Set(validPages.map(p => p.meta.chapter).filter(Boolean))];
+        if (chapters.length > 1) {
+            const tocPage = document.createElement('div');
+            tocPage.className = 'pilot-page chapter-start';
+            tocPage.innerHTML = `
+                <div class="pg-content">
+                    <h1 style="font-family: 'Outfit', sans-serif; font-size: 36px; margin-bottom: 40px;">Table of Contents</h1>
+                    <ul style="list-style: none; padding: 0; font-size: 16px; line-height: 2.2;">
+                        ${chapters.map(ch => `<li style="border-bottom: 1px dotted #e2e8f0; padding-bottom: 4px;">${typeof ch === 'string' ? ch : ch.title || ch}</li>`).join('')}
+                    </ul>
+                </div>
+            `;
+            container.appendChild(tocPage);
+        }
     }
 
     // 2. Create AI result container

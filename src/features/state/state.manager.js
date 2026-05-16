@@ -17,7 +17,6 @@ class StateManager {
         this.autoPilotStopPage = null;
         this.flipDelay = 500;
         this.lastFlipTime = 0;
-        this.isTransitioning = false;
         this.hasSnappedCurrentPage = false;
         this.fixedLayout = false; // Design Intent: Track book layout for heuristic thresholds
 
@@ -63,21 +62,7 @@ class StateManager {
     }
 
     // Page state
-    setTransitioning(isTransitioning) {
-        this.isTransitioning = isTransitioning;
-        if (isTransitioning) {
-            if (this._transitionSafetyTimeout) clearTimeout(this._transitionSafetyTimeout);
-            this._transitionSafetyTimeout = setTimeout(() => {
-                if (this.isTransitioning) {
-                    logger.log('NAV', 'Transition lock safety timeout reached. Forcing release.');
-                    this.setTransitioning(false);
-                }
-            }, 8000); // 8s safety net
-        } else if (this._transitionSafetyTimeout) {
-            clearTimeout(this._transitionSafetyTimeout);
-            this._transitionSafetyTimeout = null;
-        }
-    }
+
 
     setHasSnappedCurrentPage(hasSnapped) {
         this.hasSnappedCurrentPage = hasSnapped;
@@ -117,8 +102,26 @@ class StateManager {
     getFlipDelay() { return this.flipDelay; }
     getLastFlipTime() { return this.lastFlipTime; }
     setLastFlipTime(time) { this.lastFlipTime = time; }
-    getIsTransitioning() { return this.isTransitioning; }
+
     getHasSnappedCurrentPage() { return this.hasSnappedCurrentPage; }
+
+    // TOC / Outline sync (restored from old git commits)
+    setOutline(outline, bookId) {
+        this.currentBookId = bookId || this.currentBookId;
+        this.outline = outline || [];
+        // Broadcast to side panel
+        try {
+            chrome.runtime.sendMessage({ type: 'TOC_UPDATE', data: this.outline, bookId: this.currentBookId });
+        } catch (e) {}
+        console.log('[State] Outline synced:', this.outline.length, 'items');
+    }
+
+    setPagebreaks(pagebreaks, bookId) {
+        this.pagebreaks = pagebreaks || [];
+        try {
+            chrome.runtime.sendMessage({ type: 'PAGEBREAKS_UPDATE', data: this.pagebreaks, bookId: this.currentBookId });
+        } catch (e) {}
+    }
 
     // Current page
     getCurrentPage() {

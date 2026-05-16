@@ -15,6 +15,19 @@ export const chapterTreeService = {
     init(uiElements) {
         this.ui = uiElements;
         this.setupListeners();
+        // Auto-load saved TOC from localStorage (old git commit pattern)
+        setTimeout(() => {
+            const keys = Object.keys(localStorage).filter(k => k.startsWith('__VS_TOC_'));
+            if (keys.length > 0) {
+                try {
+                    const saved = JSON.parse(localStorage.getItem(keys[0]));
+                    if (Array.isArray(saved) && saved.length > 0) {
+                        this.handleOutlineUpdate(saved);
+                        console.log('[PilotPro] Auto-loaded TOC from localStorage:', saved.length);
+                    }
+                } catch (e) {}
+            }
+        }, 800);
     },
 
     setupListeners() {
@@ -172,10 +185,22 @@ export const chapterTreeService = {
         
         this.updateSelectionState(false);
     },
-
     updateSelectionState(refreshList = true) {
         if (this.ui.selectionCount) this.ui.selectionCount.textContent = `${selectedChapters.size} SELECTED`;
         if (refreshList) this.renderChapterList();
     }
 };
+
+// Auto-sync TOC from intercept (restored from old git commits)
+window.addEventListener('message', (event) => {
+    if (event.source !== window) return;
+    if (event.data && (event.data.type === 'VS_OUTLINE_JSON' || event.data.type === 'VS_PAGEBREAKS_JSON')) {
+        const outline = event.data.data || event.data;
+        if (Array.isArray(outline) && outline.length > 0) {
+            chapterTreeService.handleOutlineUpdate(outline);
+            console.log('[PilotPro] TOC synced via postMessage:', outline.length, 'items');
+        }
+    }
+});
+
 export default chapterTreeService;

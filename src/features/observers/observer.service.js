@@ -58,8 +58,7 @@ class ObserverService {
         const checkAndSchedule = () => {
             if (autoSnapFired) return true;
             
-            const isTransitioning = stateManager.getIsTransitioning();
-            if (isTransitioning) return false;
+
 
             const found = stateManager.getCustomSelector() ? contentDetector.findDeep(stateManager.getCustomSelector()) : contentDetector.autoDetectContent();
             if (contentDetector.isContentValid(found)) {
@@ -95,40 +94,9 @@ class ObserverService {
     }
 
     armPageChangeObserver() {
-        if (this.pageChangeObserver) this.pageChangeObserver.disconnect();
-
-        const checkForChange = debounce(() => {
-            if (document.hidden) return;
-
-            if (stateManager.getIsTransitioning()) {
-                logger.log('SENSOR', 'Page-change detected while locked. Deferring check 1000ms.');
-                setTimeout(checkForChange, 1000);
-                return;
-            }
-
-            const content = stateManager.getCustomSelector() ? contentDetector.findDeep(stateManager.getCustomSelector()) : contentDetector.autoDetectContent();
-            if (!content) return;
-
-            const currentFP = quickHash(contentDetector.getFingerprintSource(content));
-
-            // More sensitive change detection - also check text content specifically
-            const currentText = contentDetector.getPureContentText(content);
-            const currentTextHash = quickHash(currentText);
-
-            const fpChanged = currentFP !== stateManager.getLastContentFP();
-            const textChanged = currentTextHash !== stateManager.getLastTextHash();
-
-            if (fpChanged || textChanged) {
-                logger.log('SENSOR', `Change detected (FP: ${fpChanged}, Text: ${textChanged}). Queuing snap.`);
-                captureService.scheduleSnap(5000); 
-            }
-        }, 2000); 
-
-        this.pageChangeObserver = new MutationObserver(checkForChange);
-        this.pageChangeObserver.observe(document.body || document.documentElement, {
-            childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['src', 'style']
-        });
-        logger.log('SENSOR', 'Page-change observer armed with enhanced detection.');
+        // Completely disabled - user must explicitly start autonomous mode
+        // to enable automatic change detection and snapping.
+        return;
     }
 
     onSpaNavigation() {

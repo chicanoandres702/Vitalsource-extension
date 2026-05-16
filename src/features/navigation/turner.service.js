@@ -64,7 +64,18 @@ class TurnerService {
      const key = direction === 'next' ? 'ArrowRight' : 'ArrowLeft';
      const code = direction === 'next' ? KEY_CODES.ARROW_RIGHT : KEY_CODES.ARROW_LEFT;
 
-     // Try direct dispatch first (worked reliably in earlier versions)
+     // 1. Click next button (most reliable on mosaic-book)
+     try {
+       const nextBtn = document.querySelector(
+         'button[aria-label*="Next"], .next-button, [data-testid="next-btn"], .vst-icon-next, mosaic-book button[aria-label*="Next"]'
+       );
+       if (nextBtn) {
+         nextBtn.click();
+         return 'button';
+       }
+     } catch (e) {}
+
+     // 2. Direct keyboard dispatch
      try {
        const event = new KeyboardEvent('keydown', {
          key,
@@ -75,15 +86,13 @@ class TurnerService {
          cancelable: true
        });
        document.dispatchEvent(event);
-       // Also try top window
        if (window.top && window.top !== window) {
          window.top.document.dispatchEvent(event);
        }
        return 'direct';
-     } catch (e) {
-       // Fall back to debugger
-     }
+     } catch (e) {}
 
+     // 3. Debugger fallback
      return new Promise((resolve, reject) => {
        chrome.runtime.sendMessage({ 
          type: 'REQUEST_NAVIGATION', 
@@ -95,12 +104,12 @@ class TurnerService {
          if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
          else resolve(response);
        });
-     });
-   }
-
-  /**
-   * Moves to next page and returns a promise that resolves when the UI has changed.
-   */
+      });
+    }
+ 
+   /**
+    * Moves to next page and returns a promise that resolves when the UI has changed.
+    */
   async nextPage() {
     return this.navigate('next', this.selectors.nextButton);
   }
@@ -113,26 +122,17 @@ class TurnerService {
   }
 
   async navigate(direction, selector) {
-    const previousPageText = stateManager.getCurrentPage();
-    try {
-      stateManager.setTransitioning(true);
-      if (!isExtensionAlive()) return false;
+    if (!isExtensionAlive()) return false;
 
-      const navResult = await this.requestGlobalNavigation(direction);
+    const navResult = await this.requestGlobalNavigation(direction);
 
-      // For direct dispatch (the reliable old method), release lock quickly
-      if (navResult === 'direct') {
-        // Give the reader a moment to react, then release
-        await new Promise(r => setTimeout(r, 400));
-        return true;
-      }
-
-      // For debugger fallback, wait for page change detection
-      const success = await this.waitForPageChange(previousPageText, TIMEOUTS.PAGE_CHANGE_MAX);
-      return success;
-    } finally {
-      stateManager.setTransitioning(false);
+    if (navResult === 'button' || navResult === 'direct') {
+      await new Promise(r => setTimeout(r, 350));
+      return true;
     }
+
+    const success = await this.waitForPageChange(stateManager.getCurrentPage(), TIMEOUTS.PAGE_CHANGE_MAX);
+    return success;
   }
 
   async waitForPageChange(oldValue, timeout = TIMEOUTS.PAGE_CHANGE_DEFAULT) {

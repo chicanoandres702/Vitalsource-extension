@@ -31,7 +31,7 @@ export const captureOrchestrator = {
         }
 
         // Concurrency Lock
-        if (this.isSnapping || (stateManager.getIsTransitioning() && !force)) {
+        if (this.isSnapping) {
             setTimeout(() => this.snapWithRetry(attempt, force), 300);
             return;
         }
